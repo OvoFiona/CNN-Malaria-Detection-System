@@ -1,8 +1,8 @@
-CNN Malaria Detection
+**CNN Malaria Detection**
 
 
 
-A Convolutional Neural Network (CNN) that classifies blood cell images as Parasitized (malaria-infected) or Uninfected.
+A Convolutional Neural Network (CNN) that classifies blood cell images as **Parasitized** (malaria-infected) or **Uninfected.**
 
 
 
@@ -24,7 +24,7 @@ Malaria is a life-threatening disease caused by parasites transmitted through th
 
 
 
-Dataset
+**Dataset**
 
 
 
@@ -40,13 +40,9 @@ The images are not included in this repository. Download them from the link abov
 
 
 
-data/
+**data/**
 
-&#x20; Parasitized/
+&#x20;   **├── Parasitized/**
 
-&#x20; Uninfected/
-
-
-
-
+&#x20;   **└── Uninfected/**
 
