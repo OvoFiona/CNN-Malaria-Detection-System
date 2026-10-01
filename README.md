@@ -14,16 +14,6 @@ Malaria is a life-threatening disease caused by parasites transmitted through th
 
 
 
-\- Task: Binary image classification
-
-\- Classes: Parasitized / Uninfected
-
-\- Framework: TensorFlow / Keras
-
-\- Status: In progress
-
-
-
 **Dataset**
 
 
