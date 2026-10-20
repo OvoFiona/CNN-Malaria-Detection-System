@@ -93,3 +93,31 @@ class LabReport(models.Model):
 
     def __str__(self):
         return f"Lab report {self.pk} for visit {self.visit_id}"
+
+    # The two answers the CNN can give
+class PredictionLabel(models.TextChoices):
+    PARASITIZED = "parasitized", "Parasitized"
+    UNINFECTED = "uninfected", "Uninfected"
+
+
+# Decides where an uploaded image is saved. We build our own file name,
+# so a user-chosen name can never cause trouble
+def report_image_path(instance, filename):
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
+    return f"smears/{timezone.now():%Y/%m}/report_{instance.report_id}_{timezone.now():%H%M%S%f}.{ext}"
+
+
+# One uploaded image + the CNN's prediction for it
+class ReportImage(models.Model):
+    # CASCADE = if a report is deleted, its images go with it
+    report = models.ForeignKey(LabReport, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to=report_image_path)
+
+    predicted_label = models.CharField(max_length=12, choices=PredictionLabel.choices)
+    probability = models.FloatField(help_text="Model probability that the cell is parasitized (0-1).")
+    threshold = models.FloatField(help_text="Decision threshold used for this prediction.")
+    model_version = models.CharField(max_length=64)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at"]
