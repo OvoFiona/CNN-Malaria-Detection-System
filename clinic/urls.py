@@ -3,9 +3,10 @@ from rest_framework.routers import DefaultRouter
 
 from . import views
 
-# The router builds all the patient URLs for us
+# The router builds all the URLs for us
 router = DefaultRouter()
 router.register("patients", views.PatientViewSet, basename="patient")
+router.register("visits", views.VisitViewSet, basename="visit")
 
 urlpatterns = [
     path("", include(router.urls)),
