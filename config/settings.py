@@ -140,3 +140,7 @@ REST_FRAMEWORK = {
     # Every endpoint needs a logged-in user, unless we say otherwise
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }
+
+# Where uploaded images are stored on disk, and the web address they are served from
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
