@@ -75,3 +75,21 @@ class Visit(models.Model):
 
     def __str__(self):
         return f"Visit {self.pk} - {self.patient.name} ({self.status})"
+
+    
+# One report per visit, written by the lab technician
+class LabReport(models.Model):
+    # OneToOne = a visit can have only ONE lab report (and a report belongs to one visit)
+    visit = models.OneToOneField(Visit, on_delete=models.CASCADE, related_name="lab_report")
+    lab = models.ForeignKey(Lab, on_delete=models.PROTECT, related_name="lab_reports")
+    # The lab technician who made the report
+    technician = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="lab_reports")
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Lab report {self.pk} for visit {self.visit_id}"
