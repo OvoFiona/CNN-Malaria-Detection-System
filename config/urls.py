@@ -21,4 +21,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     # Everything in accounts/urls.py now lives under /api/
     path("api/", include("accounts.urls")),
+    path("api/", include("clinic.urls")),
 ]
