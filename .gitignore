@@ -6,3 +6,4 @@ data/
 *.png
 *.jpg
 *.jpeg
+ml_models/*.h5
