@@ -121,3 +121,23 @@ class ReportImage(models.Model):
 
     class Meta:
         ordering = ["uploaded_at"]
+
+# The two possible final results
+class DiagnosisResult(models.TextChoices):
+    POSITIVE = "positive", "Malaria positive"
+    NEGATIVE = "negative", "Malaria negative"
+
+
+# The doctor's final decision for a visit
+class Diagnosis(models.Model):
+    # One diagnosis per visit and per lab report
+    visit = models.OneToOneField(Visit, on_delete=models.CASCADE, related_name="diagnosis")
+    lab_report = models.OneToOneField(LabReport, on_delete=models.PROTECT, related_name="diagnosis")
+    # A normal link (NOT one-to-one): one doctor can diagnose many visits
+    doctor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="diagnoses")
+    result = models.CharField(max_length=10, choices=DiagnosisResult.choices)
+    # True = the doctor confirmed the CNN's finding; False = the doctor overruled it
+    agrees_with_prediction = models.BooleanField()
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
