@@ -1,0 +1,13 @@
+{
+  "threshold": 0.19,
+  "classes": [
+    "Uninfected",
+    "Parasitized"
+  ],
+  "positive_class": "Parasitized",
+  "img_size": [
+    128,
+    128
+  ],
+  "rescale": "1/255"
+}

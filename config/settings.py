@@ -144,3 +144,12 @@ REST_FRAMEWORK = {
 # Where uploaded images are stored on disk, and the web address they are served from
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# The CNN files made by the training notebook
+MODEL_PATH = BASE_DIR / "ml_models" / "malaria_cnn.h5"          # the trained model
+MODEL_CONFIG_PATH = BASE_DIR / "ml_models" / "model_config.json"  # holds the 0.19 threshold
+
+# Upload limits
+MAX_UPLOAD_MB = 5                       # largest image allowed
+ALLOWED_IMAGE_FORMATS = ("PNG", "JPEG")
+MIN_IMAGE_SIDE = 32                     # pixels; smaller images are rejected
