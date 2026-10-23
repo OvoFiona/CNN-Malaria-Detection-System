@@ -67,3 +67,19 @@ class UserWriteSerializer(serializers.ModelSerializer):
             user.set_password(password)    # hashes it
             user.save()
         return user
+
+# Used when a logged-in user changes their own password
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField()
+    new_password = serializers.CharField()
+
+    # The old password must be correct
+    def validate_old_password(self, value):
+        if not self.context["request"].user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+    # The new password must pass Django's password rules
+    def validate_new_password(self, value):
+        validate_password(value, self.context["request"].user)
+        return value
