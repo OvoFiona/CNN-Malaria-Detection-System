@@ -1,10 +1,14 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
 from . import views
 
-# Each line connects a web address to a view
+# The router builds the /users/ URLs (list, create, view one, edit)
+router = DefaultRouter()
+router.register("users", views.UserViewSet, basename="user")
+
 urlpatterns = [
     path("auth/login/", views.LoginView.as_view(), name="login"),
     path("auth/me/", views.MeView.as_view(), name="me"),
-    path("users/", views.UserListView.as_view(), name="user-list"),
+    path("", include(router.urls)),
 ]
