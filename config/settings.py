@@ -155,6 +155,5 @@ ALLOWED_IMAGE_FORMATS = ("PNG", "JPEG")
 MIN_IMAGE_SIDE = 32                     # pixels; smaller images are rejected
 
 # Password-reset emails. In development they are printed in the server terminal
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "no-reply@malaria-system.local"
 FRONTEND_URL = "http://localhost:5173"    # the React site, used inside the reset link
