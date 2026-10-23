@@ -1,3 +1,10 @@
+from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
@@ -8,8 +15,14 @@ from clinic.audit import log_action
 
 from .models import User
 from .permissions import IsAdmin
-from .serializers import ChangePasswordSerializer, LoginSerializer, UserSerializer, UserWriteSerializer
-
+from .serializers import (
+    ChangePasswordSerializer,
+    LoginSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
+    UserSerializer,
+    UserWriteSerializer,
+)
 
 # Runs when someone sends their email and password to log in
 class LoginView(APIView):
@@ -74,3 +87,57 @@ class ChangePasswordView(APIView):
         Token.objects.filter(user=request.user).delete()
         log_action(request.user, "CHANGE_PASSWORD")
         return Response({"detail": "Password changed. Please log in again."})
+
+# Step 1: the user asks for a reset link
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = User.objects.filter(email__iexact=serializer.validated_data["email"], is_active=True).first()
+        if user:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))          # the user's id, encoded
+            token = default_token_generator.make_token(user)          # a one-time code
+            link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+            send_mail(
+                "Reset your Malaria Diagnosis System password",
+                f"Hello {user.name},\n\nUse this link to reset your password:\n{link}\n\n"
+                "If you did not request this, you can ignore this email.",
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+            )
+            log_action(user, "PASSWORD_RESET_REQUESTED")
+        # The SAME answer whether or not the email exists
+        return Response({"detail": "If that email is registered, a reset link has been sent."})
+
+
+# Step 2: the user submits the code from the email together with a new password
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        # Find the user from the encoded id
+        try:
+            user = User.objects.get(pk=force_str(urlsafe_base64_decode(data["uid"])))
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            user = None
+        # The code must be valid and not used or expired
+        if user is None or not default_token_generator.check_token(user, data["token"]):
+            return Response({"detail": "This reset link is invalid or has expired."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # The new password must follow the password rules
+        try:
+            validate_password(data["new_password"], user)
+        except DjangoValidationError as exc:
+            return Response({"new_password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(data["new_password"])
+        user.save()
+        Token.objects.filter(user=user).delete()      # log out any old sessions
+        log_action(user, "PASSWORD_RESET_COMPLETED")
+        return Response({"detail": "Password has been reset. You can now log in."})
