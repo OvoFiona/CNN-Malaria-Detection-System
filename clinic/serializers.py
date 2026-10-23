@@ -2,8 +2,7 @@ from rest_framework import serializers
 from django.conf import settings
 from PIL import Image, UnidentifiedImageError
 
-from .models import Diagnosis, LabReport, Patient, ReportImage, Visit, VisitStatus
-
+from .models import Diagnosis, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
 
 # Converts a Patient to JSON and checks the data when one is created
 class PatientSerializer(serializers.ModelSerializer):
@@ -140,3 +139,12 @@ class DiagnosisInputSerializer(serializers.Serializer):
     result = serializers.ChoiceField(choices=["positive", "negative"])
     agrees_with_prediction = serializers.BooleanField()
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+# How a log row looks as JSON (read-only)
+class SystemLogSerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(source="actor.name", read_only=True, default="")
+
+    class Meta:
+        model = SystemLog
+        fields = ["id", "actor", "actor_name", "actor_role", "action", "description", "logged_at"]
+        read_only_fields = fields
