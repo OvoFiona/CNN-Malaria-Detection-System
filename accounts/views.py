@@ -24,10 +24,12 @@ from .serializers import (
     UserWriteSerializer,
 )
 
+
 # Runs when someone sends their email and password to log in
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_scope = "auth"                      # NEW: limits login attempts
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -68,6 +70,7 @@ class UserViewSet(viewsets.ModelViewSet):
             Token.objects.filter(user=user).delete()
         log_action(self.request.user, "UPDATE_USER", f"user_id={user.pk} active={user.is_active} role={user.role}")
 
+
 # Logs the user out by removing their token
 class LogoutView(APIView):
     def post(self, request):
@@ -88,10 +91,12 @@ class ChangePasswordView(APIView):
         log_action(request.user, "CHANGE_PASSWORD")
         return Response({"detail": "Password changed. Please log in again."})
 
-# Step 1: the user asks for a reset link
+
+# Password reset, step 1: the user asks for a reset link
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_scope = "password_reset"            # NEW: limits reset requests
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -113,10 +118,11 @@ class PasswordResetRequestView(APIView):
         return Response({"detail": "If that email is registered, a reset link has been sent."})
 
 
-# Step 2: the user submits the code from the email together with a new password
+# Password reset, step 2: the user submits the code from the email with a new password
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_scope = "password_reset"            # NEW: limits reset attempts
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)

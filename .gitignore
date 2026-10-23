@@ -7,3 +7,5 @@ data/
 *.jpg
 *.jpeg
 ml_models/*.h5
+.env
+*.sqlite3
