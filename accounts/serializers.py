@@ -1,14 +1,15 @@
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User
+from .models import Role, User
 
 
 # Shows a user as JSON. Note: the password is NOT included
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "email", "name", "role", "lab"]
+        fields = ["id", "email", "name", "role", "lab", "is_active"]
 
 
 # Checks the email + password that someone sends when logging in
@@ -17,10 +18,52 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField()
 
     def validate(self, data):
-        # Django scrambles the typed password and compares it with the stored hash
         user = authenticate(username=data["email"].lower(), password=data["password"])
         # Same message whether the email or the password is wrong, so attackers learn nothing
         if user is None or not user.is_active:
             raise serializers.ValidationError("Invalid email or password.")
         data["user"] = user
         return data
+
+
+# Used by the admin to CREATE and EDIT accounts
+class UserWriteSerializer(serializers.ModelSerializer):
+    # write_only = accepted when sent in, never shown back
+    password = serializers.CharField(write_only=True, required=False, style={"input_type": "password"})
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "name", "role", "lab", "is_active", "password"]
+
+    # Emails are stored in lowercase and must be unique
+    def validate_email(self, value):
+        value = value.lower()
+        taken = User.objects.filter(email__iexact=value)
+        if self.instance:
+            taken = taken.exclude(pk=self.instance.pk)   # editing yourself is fine
+        if taken.exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def validate(self, attrs):
+        # A new account must come with a password
+        if self.instance is None and not attrs.get("password"):
+            raise serializers.ValidationError({"password": "A password is required for a new account."})
+        # Apply Django's password rules (length, not too common, not all digits...)
+        if attrs.get("password"):
+            validate_password(attrs["password"])
+        return attrs
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        # Only admins may open Django's own admin site
+        validated_data["is_staff"] = validated_data.get("role") == Role.ADMIN
+        return User.objects.create_user(password=password, **validated_data)
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)    # hashes it
+            user.save()
+        return user
