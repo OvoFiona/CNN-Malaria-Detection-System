@@ -141,3 +141,16 @@ class Diagnosis(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+# One row for every important action in the system (the audit trail)
+class SystemLog(models.Model):
+    # Who did it. Kept even if the user is later removed (SET_NULL)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="log_entries")
+    actor_role = models.CharField(max_length=20, blank=True)   # their role at that moment
+    action = models.CharField(max_length=100)                  # e.g. LOGIN, CREATE_VISIT
+    description = models.TextField(blank=True)                 # extra detail, e.g. visit_id=3
+    logged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-logged_at"]    # newest first
+        indexes = [models.Index(fields=["action"])]
