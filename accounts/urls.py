@@ -13,4 +13,6 @@ urlpatterns = [
     path("", include(router.urls)),
     path("auth/logout/", views.LogoutView.as_view(), name="logout"),
     path("auth/change-password/", views.ChangePasswordView.as_view(), name="change-password"),
+    path("auth/password-reset/", views.PasswordResetRequestView.as_view(), name="password-reset"),
+    path("auth/password-reset/confirm/", views.PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 ]
