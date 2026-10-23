@@ -83,3 +83,14 @@ class ChangePasswordSerializer(serializers.Serializer):
     def validate_new_password(self, value):
         validate_password(value, self.context["request"].user)
         return value
+
+# Step 1 of a reset: the user enters their email
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+# Step 2: the user comes back from the email link with the code in it, and chooses a new password
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()            # which user (encoded)
+    token = serializers.CharField()          # one-time proof that the email was received
+    new_password = serializers.CharField()
