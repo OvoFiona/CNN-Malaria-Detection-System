@@ -13,7 +13,7 @@ export const NAV = {
   ],
   lab_technician: [
     HOME,
-    { to: "/lab", label: "Lab queue", icon: "bi-droplet-half", desc: "Upload cell images and run the malaria scan." },
+    { to: "/lab", label: "Lab Reports", icon: "bi-droplet-half", desc: "Upload cell images and run the malaria scan." },
   ],
   doctor: [
     HOME,
