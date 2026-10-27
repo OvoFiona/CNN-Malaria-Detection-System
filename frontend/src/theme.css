@@ -1,0 +1,265 @@
+/* ============================================================
+   theme.css - bright, friendly look on top of Bootstrap.
+   Teal is the ONE main colour. Everything else is a soft tint.
+   ============================================================ */
+
+:root {
+  --brand: #0d9488;        /* fresh teal: the main colour */
+  --brand-dark: #0b7a70;   /* darker teal for hover */
+  --brand-soft: #e3f4f1;   /* pale teal tint */
+  --accent: #ff7a59;       /* coral: tiny decorative touches only */
+  --line: #dcebe8;         /* soft border colour */
+
+  /* Tell Bootstrap to use our colours and font */
+  --bs-primary: #0d9488;
+  --bs-primary-rgb: 13, 148, 136;
+  --bs-body-bg: #f4faf9;
+  --bs-body-color: #1f2933;
+  --bs-body-font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  --bs-link-color: #0d9488;
+  --bs-link-color-rgb: 13, 148, 136;
+  --bs-link-hover-color: #0b7a70;
+  --bs-link-hover-color-rgb: 11, 122, 112;
+  --bs-border-radius: 0.75rem;
+}
+
+/* Bootstrap buttons set their own colours, so we override them */
+.btn-primary {
+  --bs-btn-bg: #0d9488;
+  --bs-btn-border-color: #0d9488;
+  --bs-btn-hover-bg: #0b7a70;
+  --bs-btn-hover-border-color: #0b7a70;
+  --bs-btn-active-bg: #0a6b62;
+  --bs-btn-active-border-color: #0a6b62;
+  --bs-btn-disabled-bg: #0d9488;
+  --bs-btn-disabled-border-color: #0d9488;
+  --bs-btn-focus-shadow-rgb: 13, 148, 136;
+  font-weight: 600;
+}
+
+/* Soft teal glow when you click into an input, and teal tick boxes */
+.form-control:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 0.25rem rgba(13, 148, 136, 0.18);
+}
+.form-check-input:checked {
+  background-color: #0d9488;
+  border-color: #0d9488;
+}
+.form-check-input:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 0.25rem rgba(13, 148, 136, 0.18);
+}
+
+/* ---------------- LOGIN PAGE ---------------- */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+}
+
+/* Left half: light gradient with floating cells */
+.login-brand {
+  flex: 1.1;
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: linear-gradient(150deg, #c4efe8 0%, #d6ebfb 100%);
+}
+.login-brand-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Right half: the sign-in area */
+.login-form-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: #ffffff;
+  min-width: 0;                   /* lets the right side shrink on phones */
+}
+.login-card {
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;                   /* stops the slider widening the whole page */
+}
+
+/* Placeholder text (the example email) is lighter so it is not mistaken for typed text */
+.form-control::placeholder {
+  color: #9aaaa7;
+}
+
+/* Page fades in softly when it opens */
+.fade-in {
+  animation: fadeIn 0.6s ease both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Floating soft circles in the background */
+.cell {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.55;
+  animation: floaty 7s ease-in-out infinite;
+}
+.cell-1 { width: 190px; height: 190px; top: -50px; right: -40px; background: #ffffff; }
+.cell-2 { width: 110px; height: 110px; bottom: 60px; right: 6%; background: #ffc9b8; animation-delay: 1.5s; }
+.cell-3 { width: 150px; height: 150px; bottom: -50px; left: -30px; background: #ffffff; animation-delay: 2s; }
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-18px); }
+}
+
+/* ---------- Microscope illustration ---------- */
+.scan-graphic {
+  display: block;
+  width: min(330px, 38vh);
+  height: auto;
+  filter: drop-shadow(0 14px 24px rgba(13, 148, 136, 0.25));
+}
+/* The scanning line moves up and down inside the picture */
+.scan-line {
+  animation: scan 3.6s ease-in-out infinite alternate;
+}
+@keyframes scan {
+  from { transform: translateY(-150px); }
+  to   { transform: translateY(150px); }
+}
+/* The detection box gently pulses */
+.detect-box {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.07); }
+}
+.scan-caption {
+  display: inline-block;
+  margin-top: 1rem;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0b7a70;
+}
+
+/* ---------- Profile slider ---------- */
+.profile-track {
+  display: flex;
+  gap: 0.9rem;
+  overflow-x: auto;
+  padding: 0.6rem 0.25rem 1rem;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;          /* hide the scrollbar (Firefox) */
+  cursor: grab;
+  user-select: none;
+  /* fade the edges so it's clear there is more to slide to */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%);
+}
+.profile-track::-webkit-scrollbar { display: none; }  /* hide the scrollbar (Chrome/Edge) */
+.profile-track.dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;         /* snapping off while the mouse is dragging */
+}
+
+.profile-card {
+  flex: 0 0 172px;
+  scroll-snap-align: center;
+  position: relative;
+  border: 2px solid var(--line);
+  background: #ffffff;
+  border-radius: 1.25rem;
+  padding: 1rem 0.75rem;
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.profile-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--brand);
+}
+.profile-card.active {
+  border-color: var(--brand);
+  background: linear-gradient(180deg, #eefaf8, #ffffff);
+  box-shadow: 0 8px 22px rgba(13, 148, 136, 0.2);
+}
+/* Round profile picture with a small role badge in the corner */
+.avatar-wrap {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  margin: 0 auto 0.6rem;
+  pointer-events: none;           /* so dragging never grabs the picture */
+}
+.avatar-wrap .avatar {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.avatar-badge {
+  position: absolute;
+  right: -4px;
+  bottom: 2px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #ffffff;
+  border: 3px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+/* Tick in the corner of the chosen card (pops in) */
+.profile-card .tick {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 1.25rem;
+  color: var(--brand);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: all 0.2s ease;
+}
+.profile-card.active .tick {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Little round arrow buttons above the slider */
+.slider-arrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.slider-arrow:hover {
+  background: var(--brand);
+  color: #ffffff;
+}
+
+/* Status pills (used on later pages). Use a plain <span>, not <Badge> */
+.status-badge   { font-weight: 600; border-radius: 999px; padding: 0.4em 0.85em; display: inline-block; }
+.status-lab      { background: #fef3c7; color: #b45309; }
+.status-doctor   { background: #dbeefc; color: #1d6fa5; }
+.status-done     { background: #dcfce7; color: #15803d; }
+.status-positive { background: #fde4e5; color: #c0262b; }
