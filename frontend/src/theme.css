@@ -15,7 +15,7 @@
   --bs-primary-rgb: 13, 148, 136;
   --bs-body-bg: #f4faf9;
   --bs-body-color: #1f2933;
-  --bs-body-font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  --bs-body-font-family: "DM Sans", system-ui, sans-serif;
   --bs-link-color: #0d9488;
   --bs-link-color-rgb: 13, 148, 136;
   --bs-link-hover-color: #0b7a70;
@@ -263,3 +263,9 @@
 .status-doctor   { background: #dbeefc; color: #1d6fa5; }
 .status-done     { background: #dcfce7; color: #15803d; }
 .status-positive { background: #fde4e5; color: #c0262b; }
+
+/* Headings use the serif font from the portfolio */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+h4 { font-size: 1.7rem; }

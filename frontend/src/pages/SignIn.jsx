@@ -67,7 +67,7 @@ export default function SignIn() {
               <Form.Group className="mb-3" controlId="email">
                 <Form.Label className="fw-semibold">Email</Form.Label>
                 <InputGroup>
-                  <InputGroup.Text><i className="bi bi-envelope"></i></InputGroup.Text>
+                  
                   <Form.Control
                     type="email"
                     placeholder={role.placeholder}
@@ -81,7 +81,7 @@ export default function SignIn() {
               <Form.Group className="mb-3" controlId="password">
                 <Form.Label className="fw-semibold">Password</Form.Label>
                 <InputGroup>
-                  <InputGroup.Text><i className="bi bi-lock"></i></InputGroup.Text>
+                  
                   <Form.Control
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
