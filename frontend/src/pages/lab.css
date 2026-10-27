@@ -1,0 +1,143 @@
+/* lab.css - styles for the Lab reports screen only */
+
+/* the two tabs: the open one is teal */
+.lab-tabs .nav-link {
+  color: var(--bs-secondary-color, #6c757d);
+  font-weight: 600;
+}
+.lab-tabs .nav-link.active {
+  color: var(--bs-primary);
+  background: transparent;
+  border-bottom-color: var(--bs-body-bg);
+}
+.tab-count {
+  display: inline-block;
+  min-width: 1.4rem;
+  margin-left: 0.3rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* the white box around the waiting table */
+.lab-table {
+  background: #ffffff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+.lab-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color, #6c757d);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.symptoms-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* recent cases: one line per case, status on the right */
+.recent-list {
+  background: #ffffff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+.recent-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.recent-row:last-child {
+  border-bottom: 0;
+}
+
+/* summary box at the top of the report window */
+.visit-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6rem;
+  padding: 0.8rem 1rem;
+  background: #f4faf9;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+.visit-summary span.text-secondary {
+  margin-right: 0.35rem;
+}
+
+/* one scanned image and its result */
+.result-list {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.result-row:last-child {
+  border-bottom: 0;
+}
+.result-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 0.6rem;
+  background: #eef3f2;
+  flex-shrink: 0;
+}
+
+/* probability bar with a line at the threshold */
+.prob {
+  margin-top: 0.5rem;
+}
+.prob-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: #e5eceb;
+  margin-bottom: 0.3rem;
+}
+.prob-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+.prob-fill.pos { background: #c0262b; }
+.prob-fill.neg { background: #15803d; }
+.prob-threshold {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: #1f2933;
+}
+
+/* the big "Send case to doctor" button */
+.send-case {
+  width: 100%;
+  margin: 0;
+  padding: 0.8rem;
+  font-weight: 600;
+  color: #1f2933;
+  border-color: #1f2933;
+}
+.send-case:hover:not(:disabled) {
+  background: var(--bs-primary);
+  border-color: var(--bs-primary);
+  color: #ffffff;
+}
