@@ -30,11 +30,12 @@ function errorMessage(data, status) {
 // api("/auth/login/", { method: "POST", body: { email, password } })
 //   path   - the part after /api, e.g. "/patients/"
 //   method - GET (default), POST, PATCH ...
-//   body   - an object we send as JSON
+//   body   - an object we send as JSON (or a FormData when uploading a file)
 //   token  - the login token (added as a header so the server knows who we are)
 export async function api(path, { method = "GET", body, token } = {}) {
   const headers = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const isFile = body instanceof FormData;               // an image upload, not JSON
+  if (body !== undefined && !isFile) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = "Token " + token;
 
   let response;
@@ -42,7 +43,7 @@ export async function api(path, { method = "GET", body, token } = {}) {
     response = await fetch(API_URL + path, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isFile ? body : JSON.stringify(body),
     });
   } catch {
     // fetch only throws when the server cannot be reached at all
