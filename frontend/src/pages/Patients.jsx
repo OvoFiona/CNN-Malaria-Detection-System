@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Alert, Button, Form, Modal, Spinner, Table } from "react-bootstrap";
 import { useAuth } from "../AuthContext.jsx";
 import { api } from "../api.js";
@@ -140,12 +141,13 @@ export default function Patients() {
               <th>Name</th>
               <th>Age</th>
               <th>Registered</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="text-center py-5">
+                <td colSpan={5} className="text-center py-5">
                   <Spinner animation="border" size="sm" className="me-2" /> Loading patients...
                 </td>
               </tr>
@@ -154,7 +156,7 @@ export default function Patients() {
             {/* nothing found */}
             {!loading && !error && patients.length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-secondary py-5">
+                <td colSpan={5} className="text-center text-secondary py-5">
                   {term ? "No patient matches “" + term + "”." : "No patients yet. Register the first one."}
                 </td>
               </tr>
@@ -167,6 +169,11 @@ export default function Patients() {
                   <td className="fw-semibold">{p.name}</td>
                   <td>{p.age}</td>
                   <td className="text-secondary">{niceDate(p.created_at)}</td>
+                  <td className="text-end">
+                    <Link to={"/visits?patient=" + p.id} className="btn btn-outline-secondary btn-sm">
+                      Record visit
+                    </Link>
+                  </td>
                 </tr>
               ))}
           </tbody>
