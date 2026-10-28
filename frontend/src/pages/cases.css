@@ -1,0 +1,66 @@
+/* cases.css - styles for the doctor's Cases screen only (the rest comes from lab.css) */
+
+/* the two big choices: Malaria positive / Malaria negative */
+.decision-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.decision {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.decision input {
+  accent-color: var(--bs-primary);
+}
+.decision:hover {
+  background: #f4faf9;
+}
+/* the one you picked gets a coloured border: red for positive, green for negative */
+.decision.positive.chosen {
+  border-color: #c0262b;
+  background: #fde4e5;
+  color: #c0262b;
+}
+.decision.negative.chosen {
+  border-color: #15803d;
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* extra tags on a recent case */
+.status-overruled {
+  background: #fff1d6;
+  color: #9a5b00;
+}
+.status-corrected {
+  background: #e8e8f6;
+  color: #4a4a9a;
+}
+
+/* the saved diagnosis and its correction history inside the case window */
+.diagnosis-box,
+.history-row {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  padding: 0.75rem 1rem;
+  background: #f8fbfb;
+}
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (max-width: 575px) {
+  .decision-row {
+    grid-template-columns: 1fr;
+  }
+}
