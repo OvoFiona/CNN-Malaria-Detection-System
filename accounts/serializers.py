@@ -10,9 +10,12 @@ class UserSerializer(serializers.ModelSerializer):
     # "Nurse", "Lab technician"... the readable version of the role
     role_display = serializers.CharField(source="get_role_display", read_only=True)
 
+    # the name of the lab this person works in ("" when none)
+    lab_name = serializers.CharField(source="lab.name", read_only=True, default="")
+
     class Meta:
         model = User
-        fields = ["id", "email", "name", "role", "role_display", "lab", "is_active"]
+        fields = ["id", "email", "name", "role", "role_display", "lab", "lab_name", "is_active"]
 
 
 # Checks the email + password that someone sends when logging in
