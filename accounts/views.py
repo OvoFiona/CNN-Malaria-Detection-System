@@ -6,6 +6,8 @@ from django.core.mail import send_mail
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status, viewsets
+from rest_framework.exceptions import ValidationError
+from django.db.models import Q
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -13,7 +15,7 @@ from rest_framework.views import APIView
 
 from clinic.audit import log_action
 
-from .models import User
+from .models import Role, User
 from .permissions import IsAdmin
 from .serializers import (
     ChangePasswordSerializer,
@@ -63,7 +65,23 @@ class UserViewSet(viewsets.ModelViewSet):
         user = serializer.save()
         log_action(self.request.user, "CREATE_USER", f"user_id={user.pk} role={user.role}")
 
+    # Optional filters:  /api/users/?role=nurse   /api/users/?search=jane
+    def get_queryset(self):
+        users = User.objects.select_related("lab")
+        role = self.request.query_params.get("role")
+        search = self.request.query_params.get("search", "").strip()
+        if role:
+            users = users.filter(role=role)
+        if search:
+            users = users.filter(Q(name__icontains=search) | Q(email__icontains=search))
+        return users
+
     def perform_update(self, serializer):
+        # An admin must not lock themselves out by switching off or demoting their own account
+        if serializer.instance == self.request.user:
+            data = serializer.validated_data
+            if data.get("is_active") is False or ("role" in data and data["role"] != Role.ADMIN):
+                raise ValidationError("You cannot deactivate your own account or change your own role.")
         user = serializer.save()
         # A deactivated user is logged out immediately: their token is removed
         if not user.is_active:
