@@ -182,3 +182,99 @@ class SystemTests(APITestCase):
         self.nurse.is_active = False
         self.nurse.save()
         self.assertEqual(self.client.post("/api/auth/login/", good, format="json").status_code, 400)
+    # ---------- Correcting a diagnosis ----------
+    # Makes a visit that the doctor has already diagnosed. Returns the visit id
+    def diagnosed_visit(self, result="positive", agrees=True):
+        visit_id = self.new_visit()
+        report_id = self.new_report(visit_id)
+        self.client.post(f"/api/lab-reports/{report_id}/images/", {"image": make_png()}, format="multipart")
+        self.client.post(f"/api/lab-reports/{report_id}/refer/")
+        self.act_as(self.doctor)
+        self.client.post(
+            f"/api/visits/{visit_id}/diagnosis/",
+            {"result": result, "agrees_with_prediction": agrees, "notes": "first note"}, format="json",
+        )
+        return visit_id
+
+    @patch("clinic.services.ml.predict", return_value=FAKE_PREDICTION)
+    def test_doctor_can_correct_a_diagnosis_and_history_is_kept(self, _fake):
+        visit_id = self.diagnosed_visit(result="positive", agrees=True)
+
+        fix = self.client.post(
+            f"/api/visits/{visit_id}/correct-diagnosis/",
+            {"result": "negative", "agrees_with_prediction": False, "notes": "re-read the smear", "reason": "Slide was mislabelled"},
+            format="json",
+        )
+        self.assertEqual(fix.status_code, 200)
+        body = fix.json()
+        self.assertEqual(body["result"], "negative")
+        self.assertTrue(body["overruled"])
+        self.assertEqual(len(body["corrections"]), 1)
+        self.assertEqual(body["corrections"][0]["previous_result"], "positive")
+        self.assertEqual(body["corrections"][0]["reason"], "Slide was mislabelled")
+
+        # the visit now shows the corrected diagnosis, with the history
+        visit = self.client.get(f"/api/visits/{visit_id}/").json()
+        self.assertEqual(visit["diagnosis_result"], "negative")
+        self.assertEqual(len(visit["diagnosis"]["corrections"]), 1)
+        # and the audit log recorded it
+        self.assertTrue(SystemLog.objects.filter(action="CORRECT_DIAGNOSIS").exists())
+
+    @patch("clinic.services.ml.predict", return_value=FAKE_PREDICTION)
+    def test_correction_needs_a_reason_and_a_real_change(self, _fake):
+        visit_id = self.diagnosed_visit(result="positive", agrees=True)
+        url = f"/api/visits/{visit_id}/correct-diagnosis/"
+        base = {"result": "negative", "agrees_with_prediction": False, "notes": "x"}
+        # no reason
+        self.assertEqual(self.client.post(url, {**base, "reason": "  "}, format="json").status_code, 400)
+        # nothing changed
+        same = {"result": "positive", "agrees_with_prediction": True, "notes": "first note", "reason": "typo"}
+        self.assertEqual(self.client.post(url, same, format="json").status_code, 400)
+
+    @patch("clinic.services.ml.predict", return_value=FAKE_PREDICTION)
+    def test_only_a_doctor_can_correct_and_only_a_diagnosed_visit(self, _fake):
+        visit_id = self.diagnosed_visit()
+        url = f"/api/visits/{visit_id}/correct-diagnosis/"
+        body = {"result": "negative", "agrees_with_prediction": False, "notes": "", "reason": "test"}
+        for user in (self.nurse, self.tech, self.admin):
+            self.act_as(user)
+            self.assertEqual(self.client.post(url, body, format="json").status_code, 403)
+        # a visit with no diagnosis yet
+        fresh = self.new_visit()
+        self.act_as(self.doctor)
+        self.assertEqual(
+            self.client.post(f"/api/visits/{fresh}/correct-diagnosis/", body, format="json").status_code, 400
+        )
+
+    # ---------- admin: labs and staff ----------
+    def test_admin_can_list_and_add_labs_others_cannot(self):
+        for user in (self.nurse, self.tech, self.doctor):
+            self.act_as(user)
+            self.assertEqual(self.client.get("/api/labs/").status_code, 403)
+        self.act_as(self.admin)
+        made = self.client.post("/api/labs/", {"name": "Nyanza Lab", "location": "Kisumu"}, format="json")
+        self.assertEqual(made.status_code, 201)
+        # the same name again (any capitals) is refused
+        again = self.client.post("/api/labs/", {"name": "nyanza lab", "location": "x"}, format="json")
+        self.assertEqual(again.status_code, 400)
+        names = [lab["name"] for lab in self.client.get("/api/labs/").json()]
+        self.assertEqual(names, ["Nyanza Lab", "Test Lab"])
+        self.assertTrue(SystemLog.objects.filter(action="CREATE_LAB").exists())
+
+    def test_staff_list_can_be_filtered_and_shows_lab_name(self):
+        self.act_as(self.admin)
+        rows = self.client.get("/api/users/?role=doctor").json()["results"]
+        self.assertEqual([r["email"] for r in rows], ["doctor@test.org"])
+        self.assertEqual(rows[0]["lab_name"], "Test Lab")
+        found = self.client.get("/api/users/?search=TECH@").json()["results"]
+        self.assertEqual([r["email"] for r in found], ["tech@test.org"])
+
+    def test_admin_cannot_lock_themselves_out(self):
+        self.act_as(self.admin)
+        url = f"/api/users/{self.admin.pk}/"
+        self.assertEqual(self.client.patch(url, {"is_active": False}, format="json").status_code, 400)
+        self.assertEqual(self.client.patch(url, {"role": "nurse"}, format="json").status_code, 400)
+        # but they can still change someone else, and rename themselves
+        other = f"/api/users/{self.nurse.pk}/"
+        self.assertEqual(self.client.patch(other, {"is_active": False}, format="json").status_code, 200)
+        self.assertEqual(self.client.patch(url, {"name": "Chief Admin"}, format="json").status_code, 200)
