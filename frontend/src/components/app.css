@@ -137,3 +137,14 @@
   font-size: 1.5rem;
   margin-bottom: 1rem;
 }
+
+
+/* Case windows wrap their header, body and footer in a <form>.
+   Make that form fill the window so only the middle part scrolls and the buttons stay visible. */
+.modal-dialog-scrollable .modal-content > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
