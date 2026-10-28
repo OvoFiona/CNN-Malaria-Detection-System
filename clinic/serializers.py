@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.conf import settings
 from PIL import Image, UnidentifiedImageError
 
-from .models import Diagnosis, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
+from .models import Diagnosis, DiagnosisCorrection, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
 
 # Converts a Patient to JSON and checks the data when one is created
 class PatientSerializer(serializers.ModelSerializer):
@@ -26,15 +26,17 @@ class VisitSerializer(serializers.ModelSerializer):
     nurse_name = serializers.CharField(source="nurse.name", read_only=True)
     # the id of this visit's lab report, or null if the lab has not started one
     lab_report_id = serializers.SerializerMethodField()
-    # "positive" / "negative" once the doctor has diagnosed the visit, otherwise null
+    # the doctor's current answer ("positive"/"negative"), or null before diagnosis
     diagnosis_result = serializers.SerializerMethodField()
+    # the full diagnosis (who, notes, overruled flag, correction history), or null
+    diagnosis = serializers.SerializerMethodField()
 
     class Meta:
         model = Visit
         fields = [
             "id", "patient", "lab", "lab_name", "nurse", "nurse_name", "visit_date",
             "temperature", "heart_rate", "blood_pressure", "symptoms", "status",
-            "lab_report_id", "diagnosis_result", "created_at",
+            "lab_report_id", "diagnosis_result", "diagnosis", "created_at",
         ]
         read_only_fields = fields
 
@@ -43,8 +45,12 @@ class VisitSerializer(serializers.ModelSerializer):
         return report.pk if report else None
 
     def get_diagnosis_result(self, obj):
-        diagnosis = getattr(obj, "diagnosis", None)
-        return diagnosis.result if diagnosis else None
+        d = getattr(obj, "diagnosis", None)
+        return d.result if d else None
+
+    def get_diagnosis(self, obj):
+        d = getattr(obj, "diagnosis", None)
+        return DiagnosisSerializer(d).data if d else None
 
 # How a visit looks when the nurse CREATES one (only the fields she is allowed to send)
 class VisitCreateSerializer(serializers.ModelSerializer):
@@ -135,15 +141,32 @@ class ImageUploadSerializer(serializers.Serializer):
 
     def validate_image(self, value):
         return validate_uploaded_image(value)
+# One line of a diagnosis' correction history
+class DiagnosisCorrectionSerializer(serializers.ModelSerializer):
+    corrected_by_name = serializers.CharField(source="corrected_by.name", read_only=True)
+
+    class Meta:
+        model = DiagnosisCorrection
+        fields = ["id", "corrected_by", "corrected_by_name", "previous_result",
+                  "previous_agrees_with_prediction", "previous_notes", "reason", "created_at"]
+        read_only_fields = fields
+
+
 # How a diagnosis looks when we show it
 class DiagnosisSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(source="doctor.name", read_only=True)
+    corrections = DiagnosisCorrectionSerializer(many=True, read_only=True)
+    # True when the doctor disagreed with the CNN's finding
+    overruled = serializers.SerializerMethodField()
 
     class Meta:
         model = Diagnosis
         fields = ["id", "visit", "lab_report", "doctor", "doctor_name", "result",
-                  "agrees_with_prediction", "notes", "created_at"]
+                  "agrees_with_prediction", "overruled", "notes", "corrections", "created_at"]
         read_only_fields = fields
+
+    def get_overruled(self, obj):
+        return not obj.agrees_with_prediction
 
 
 # What the doctor sends: only these three things
@@ -151,6 +174,13 @@ class DiagnosisInputSerializer(serializers.Serializer):
     result = serializers.ChoiceField(choices=["positive", "negative"])
     agrees_with_prediction = serializers.BooleanField()
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+# What the doctor sends to CORRECT a diagnosis. The reason is required.
+class DiagnosisCorrectionInputSerializer(serializers.Serializer):
+    result = serializers.ChoiceField(choices=["positive", "negative"])
+    agrees_with_prediction = serializers.BooleanField()
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+    reason = serializers.CharField(allow_blank=False, trim_whitespace=True)
 
 # How a log row looks as JSON (read-only)
 class SystemLogSerializer(serializers.ModelSerializer):
