@@ -10,12 +10,13 @@ from accounts.models import Role
 from accounts.permissions import IsAdmin, IsDoctor, IsLabStaffOrDoctor, IsLabTechnician, IsNurse, IsNurseOrAdmin
 
 from .audit import log_action
-from .models import Diagnosis, DiagnosisCorrection, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
+from .models import Diagnosis, DiagnosisCorrection, Lab, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
 from .serializers import (
     DiagnosisCorrectionInputSerializer,
     DiagnosisInputSerializer,
     DiagnosisSerializer,
     ImageUploadSerializer,
+    LabSerializer,
     LabReportSerializer,
     PatientSerializer,
     ReportImageSerializer,
@@ -211,6 +212,20 @@ class LabReportViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Re
         report.visit.save(update_fields=["status", "updated_at"])
         log_action(request.user, "SEND_TO_DOCTOR", f"report_id={report.pk} visit_id={report.visit_id}")
         return Response(LabReportSerializer(report, context={"request": request}).data)
+
+
+# ---------------------------------------------------------------
+# LABS (admin only): the list fills the "Lab" drop-down when creating staff
+# ---------------------------------------------------------------
+class LabViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    queryset = Lab.objects.order_by("name")
+    serializer_class = LabSerializer
+    permission_classes = [IsAdmin]
+    pagination_class = None          # there are only a few labs, send them all at once
+
+    def perform_create(self, serializer):
+        lab = serializer.save()
+        log_action(self.request.user, "CREATE_LAB", f"lab_id={lab.pk} name={lab.name}")
 
 
 # ---------------------------------------------------------------
