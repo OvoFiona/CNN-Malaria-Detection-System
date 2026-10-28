@@ -142,6 +142,21 @@ class Diagnosis(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+# One row every time a doctor CORRECTS a diagnosis.
+# It keeps what the diagnosis said BEFORE the correction, so the history is never lost.
+class DiagnosisCorrection(models.Model):
+    diagnosis = models.ForeignKey(Diagnosis, on_delete=models.CASCADE, related_name="corrections")
+    corrected_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="diagnosis_corrections")
+    # the old values (the new values live on the Diagnosis itself)
+    previous_result = models.CharField(max_length=10, choices=DiagnosisResult.choices)
+    previous_agrees_with_prediction = models.BooleanField()
+    previous_notes = models.TextField(blank=True)
+    reason = models.TextField()                      # why the doctor changed it (required)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
 # One row for every important action in the system (the audit trail)
 class SystemLog(models.Model):
     # Who did it. Kept even if the user is later removed (SET_NULL)
