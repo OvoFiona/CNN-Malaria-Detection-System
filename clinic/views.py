@@ -10,8 +10,9 @@ from accounts.models import Role
 from accounts.permissions import IsAdmin, IsDoctor, IsLabStaffOrDoctor, IsLabTechnician, IsNurse, IsNurseOrAdmin
 
 from .audit import log_action
-from .models import Diagnosis, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
+from .models import Diagnosis, DiagnosisCorrection, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
 from .serializers import (
+    DiagnosisCorrectionInputSerializer,
     DiagnosisInputSerializer,
     DiagnosisSerializer,
     ImageUploadSerializer,
@@ -64,12 +65,12 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
     def get_permissions(self):
         if self.action == "create":
             return [IsNurse()]
-        if self.action == "diagnosis":
+        if self.action in ("diagnosis", "correct_diagnosis"):
             return [IsDoctor()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        visits = Visit.objects.select_related("patient", "lab", "nurse")
+        visits = Visit.objects.select_related("patient", "lab", "nurse", "lab_report", "diagnosis").prefetch_related("diagnosis__corrections")
         if self.request.user.role == Role.NURSE:
             visits = visits.filter(nurse=self.request.user)
         wanted = self.request.query_params.get("status")
@@ -108,6 +109,45 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
         visit.save(update_fields=["status", "updated_at"])
         log_action(request.user, "CREATE_DIAGNOSIS", f"visit_id={visit.pk} result={diagnosis.result}")
         return Response(DiagnosisSerializer(diagnosis).data, status=status.HTTP_201_CREATED)
+
+    # POST /api/visits/<id>/correct-diagnosis/  : the doctor fixes a saved diagnosis.
+    # The old values are kept in DiagnosisCorrection, so nothing is ever lost.
+    @action(detail=True, methods=["post"], url_path="correct-diagnosis")
+    @transaction.atomic
+    def correct_diagnosis(self, request, pk=None):
+        visit = self.get_object()
+        diagnosis = getattr(visit, "diagnosis", None)
+        if diagnosis is None:
+            raise ValidationError("This visit has no diagnosis to correct yet.")
+
+        data = DiagnosisCorrectionInputSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        new = data.validated_data
+
+        if (new["result"], new["agrees_with_prediction"], new["notes"]) == (
+            diagnosis.result, diagnosis.agrees_with_prediction, diagnosis.notes
+        ):
+            raise ValidationError("Nothing was changed. Change the result or the notes to make a correction.")
+
+        # 1) keep the old values
+        correction = DiagnosisCorrection.objects.create(
+            diagnosis=diagnosis,
+            corrected_by=request.user,
+            previous_result=diagnosis.result,
+            previous_agrees_with_prediction=diagnosis.agrees_with_prediction,
+            previous_notes=diagnosis.notes,
+            reason=new["reason"],
+        )
+        # 2) put the new values on the diagnosis
+        diagnosis.result = new["result"]
+        diagnosis.agrees_with_prediction = new["agrees_with_prediction"]
+        diagnosis.notes = new["notes"]
+        diagnosis.save()
+        log_action(request.user, "CORRECT_DIAGNOSIS",
+                   f"visit_id={visit.pk} {correction.previous_result} -> {diagnosis.result}")
+        # load it fresh, so the history we send back includes the correction we just made
+        fresh = Diagnosis.objects.prefetch_related("corrections").get(pk=diagnosis.pk)
+        return Response(DiagnosisSerializer(fresh).data)
 
 
 # ---------------------------------------------------------------
