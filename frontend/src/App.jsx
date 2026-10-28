@@ -4,11 +4,12 @@ import AppLayout, { RequireRole } from "./components/AppLayout.jsx";
 import Welcome from "./pages/Welcome.jsx";
 import SignIn from "./pages/SignIn.jsx";
 import Home from "./pages/Home.jsx";
-import ComingSoon from "./pages/ComingSoon.jsx";
 import Patients from "./pages/Patients.jsx";
 import Visits from "./pages/Visits.jsx";
 import LabReports from "./pages/LabReports.jsx";
 import Cases from "./pages/Cases.jsx";
+import Staff from "./pages/Staff.jsx";
+import Logs from "./pages/Logs.jsx";
 
 // Decides which page to show, based on the address in the browser.
 //   Before signing in:  /  and  /signin/nurse ...
@@ -31,8 +32,8 @@ export default function App() {
             <Route path="/visits" element={<RequireRole roles={["nurse"]}><Visits /></RequireRole>} />
             <Route path="/lab" element={<RequireRole roles={["lab_technician"]}><LabReports /></RequireRole>} />
             <Route path="/cases" element={<RequireRole roles={["doctor"]}><Cases /></RequireRole>} />
-            <Route path="/users" element={<RequireRole roles={["admin"]}><ComingSoon /></RequireRole>} />
-            <Route path="/logs" element={<RequireRole roles={["admin"]}><ComingSoon /></RequireRole>} />
+            <Route path="/users" element={<RequireRole roles={["admin"]}><Staff /></RequireRole>} />
+            <Route path="/logs" element={<RequireRole roles={["admin"]}><Logs /></RequireRole>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
