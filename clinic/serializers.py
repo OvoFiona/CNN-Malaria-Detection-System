@@ -26,19 +26,25 @@ class VisitSerializer(serializers.ModelSerializer):
     nurse_name = serializers.CharField(source="nurse.name", read_only=True)
     # the id of this visit's lab report, or null if the lab has not started one
     lab_report_id = serializers.SerializerMethodField()
+    # "positive" / "negative" once the doctor has diagnosed the visit, otherwise null
+    diagnosis_result = serializers.SerializerMethodField()
 
     class Meta:
         model = Visit
         fields = [
             "id", "patient", "lab", "lab_name", "nurse", "nurse_name", "visit_date",
             "temperature", "heart_rate", "blood_pressure", "symptoms", "status",
-            "lab_report_id", "created_at",
+            "lab_report_id", "diagnosis_result", "created_at",
         ]
         read_only_fields = fields
 
     def get_lab_report_id(self, obj):
         report = getattr(obj, "lab_report", None)
         return report.pk if report else None
+
+    def get_diagnosis_result(self, obj):
+        diagnosis = getattr(obj, "diagnosis", None)
+        return diagnosis.result if diagnosis else None
 
 # How a visit looks when the nurse CREATES one (only the fields she is allowed to send)
 class VisitCreateSerializer(serializers.ModelSerializer):
