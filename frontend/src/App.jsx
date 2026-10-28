@@ -8,6 +8,7 @@ import ComingSoon from "./pages/ComingSoon.jsx";
 import Patients from "./pages/Patients.jsx";
 import Visits from "./pages/Visits.jsx";
 import LabReports from "./pages/LabReports.jsx";
+import Cases from "./pages/Cases.jsx";
 
 // Decides which page to show, based on the address in the browser.
 //   Before signing in:  /  and  /signin/nurse ...
@@ -29,7 +30,7 @@ export default function App() {
             <Route path="/patients" element={<RequireRole roles={["nurse"]}><Patients /></RequireRole>} />
             <Route path="/visits" element={<RequireRole roles={["nurse"]}><Visits /></RequireRole>} />
             <Route path="/lab" element={<RequireRole roles={["lab_technician"]}><LabReports /></RequireRole>} />
-            <Route path="/cases" element={<RequireRole roles={["doctor"]}><ComingSoon /></RequireRole>} />
+            <Route path="/cases" element={<RequireRole roles={["doctor"]}><Cases /></RequireRole>} />
             <Route path="/users" element={<RequireRole roles={["admin"]}><ComingSoon /></RequireRole>} />
             <Route path="/logs" element={<RequireRole roles={["admin"]}><ComingSoon /></RequireRole>} />
           </Route>
