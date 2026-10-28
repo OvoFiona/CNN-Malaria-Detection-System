@@ -1,0 +1,76 @@
+/* staff.css - styles for the admin screens (Staff and Activity logs) */
+
+/* the white box around each table */
+.admin-table {
+  background: #ffffff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+.admin-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color, #6c757d);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* search box (with a magnifier) and drop-down sitting side by side */
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.admin-search {
+  position: relative;
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+.admin-search i {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--bs-secondary-color, #6c757d);
+  pointer-events: none;
+}
+.admin-search .form-control {
+  padding-left: 2.4rem;
+}
+.admin-filters .form-select {
+  width: auto;
+  min-width: 190px;
+}
+
+/* small coloured tags */
+.role-pill {
+  background: #e3f1ef;
+  color: #0b6b63;
+}
+.status-off {
+  background: #ececec;
+  color: #5c6770;
+}
+
+/* the "action" tag in the activity log */
+.action-tag {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25em 0.65em;
+  border-radius: 6px;
+  background: #eef2f4;
+  color: #34434d;
+  white-space: nowrap;
+}
+.action-tag.warn {
+  background: #fde4e5;
+  color: #c0262b;
+}
+.log-detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color, #6c757d);
+  word-break: break-word;
+}
