@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.conf import settings
 from PIL import Image, UnidentifiedImageError
 
-from .models import Diagnosis, DiagnosisCorrection, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
+from .models import Diagnosis, DiagnosisCorrection, Lab, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
 
 # Converts a Patient to JSON and checks the data when one is created
 class PatientSerializer(serializers.ModelSerializer):
@@ -141,6 +141,19 @@ class ImageUploadSerializer(serializers.Serializer):
 
     def validate_image(self, value):
         return validate_uploaded_image(value)
+# How a lab looks, and the rules for adding one (admin)
+class LabSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lab
+        fields = ["id", "name", "location"]
+
+    def validate_name(self, value):
+        value = value.strip()
+        if Lab.objects.filter(name__iexact=value).exists():
+            raise serializers.ValidationError("A lab with this name already exists.")
+        return value
+
+
 # One line of a diagnosis' correction history
 class DiagnosisCorrectionSerializer(serializers.ModelSerializer):
     corrected_by_name = serializers.CharField(source="corrected_by.name", read_only=True)
