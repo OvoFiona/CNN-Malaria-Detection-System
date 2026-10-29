@@ -109,7 +109,7 @@ export default function SignIn() {
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
                 />
-                <a href="#" className="small text-decoration-none">Forgot password?</a>
+                <Link to={"/forgot-password?from=" + role.key} className="small text-decoration-none">Forgot password?</Link>
               </div>
 
               {error && <Alert variant="danger" className="py-2">{error}</Alert>}
