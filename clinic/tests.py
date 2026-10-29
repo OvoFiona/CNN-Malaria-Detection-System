@@ -278,3 +278,121 @@ class SystemTests(APITestCase):
         other = f"/api/users/{self.nurse.pk}/"
         self.assertEqual(self.client.patch(other, {"is_active": False}, format="json").status_code, 200)
         self.assertEqual(self.client.patch(url, {"name": "Chief Admin"}, format="json").status_code, 200)
+
+    # ---------- admin: timeframe and Excel downloads ----------
+    def test_timeframe_filters_staff_and_logs(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        old = timezone.now() - timedelta(days=40)
+        User.objects.filter(pk=self.nurse.pk).update(created_at=old)
+        SystemLog.objects.create(actor=self.nurse, actor_role="nurse", action="LOGIN")
+        SystemLog.objects.filter(action="LOGIN").update(logged_at=old)
+        SystemLog.objects.create(actor=self.doctor, actor_role="doctor", action="LOGOUT")
+        self.act_as(self.admin)
+        since = (timezone.localdate() - timedelta(days=7)).isoformat()
+        emails = [u["email"] for u in self.client.get(f"/api/users/?date_from={since}").json()["results"]]
+        self.assertNotIn("nurse@test.org", emails)
+        self.assertIn("doctor@test.org", emails)
+        actions = [r["action"] for r in self.client.get(f"/api/logs/?date_from={since}").json()["results"]]
+        self.assertIn("LOGOUT", actions)
+        self.assertNotIn("LOGIN", actions)
+        # bad or reversed dates are refused
+        self.assertEqual(self.client.get("/api/logs/?date_from=yesterday").status_code, 400)
+        self.assertEqual(self.client.get("/api/logs/?date_from=2026-10-10&date_to=2026-10-01").status_code, 400)
+
+    def test_excel_downloads_follow_the_filters_and_are_admin_only(self):
+        from openpyxl import load_workbook
+        SystemLog.objects.create(actor=None, action="LOGIN_FAILED", description="=cmd|calc")
+        for user in (self.nurse, self.tech, self.doctor):
+            self.act_as(user)
+            self.assertEqual(self.client.get("/api/users/export/").status_code, 403)
+            self.assertEqual(self.client.get("/api/logs/export/").status_code, 403)
+        self.act_as(self.admin)
+        staff = self.client.get("/api/users/export/?role=doctor")
+        self.assertEqual(staff.status_code, 200)
+        self.assertIn("spreadsheetml", staff["Content-Type"])
+        rows = list(load_workbook(io.BytesIO(staff.content))["Staff"].values)
+        self.assertEqual(rows[0][0], "Name")
+        self.assertEqual([r[1] for r in rows[1:]], ["doctor@test.org"])
+        logs = self.client.get("/api/logs/export/?action=LOGIN_FAILED")
+        sheet = list(load_workbook(io.BytesIO(logs.content))["Activity logs"].values)
+        self.assertEqual(len(sheet), 2)
+        self.assertEqual(sheet[1][1], "Not signed in")
+        self.assertTrue(sheet[1][4].startswith("'"))        # text that looks like a formula is made safe
+        self.assertTrue(SystemLog.objects.filter(action="EXPORT_LOGS").exists())
+
+    # ---------- patients: edit ----------
+    def test_nurse_and_admin_can_edit_a_patient_others_cannot(self):
+        self.new_visit()                                  # makes "Jane Achieng"
+        pid = self.client.get("/api/patients/").json()["results"][0]["id"]
+        url = f"/api/patients/{pid}/"
+        self.act_as(self.nurse)
+        fixed = self.client.patch(url, {"name": "Jane A. Achieng", "age": 31}, format="json")
+        self.assertEqual(fixed.status_code, 200)
+        self.assertEqual(fixed.json()["name"], "Jane A. Achieng")
+        self.assertEqual(self.client.patch(url, {"age": 500}, format="json").status_code, 400)
+        self.assertTrue(SystemLog.objects.filter(action="UPDATE_PATIENT").exists())
+        for user in (self.tech, self.doctor):
+            self.act_as(user)
+            self.assertEqual(self.client.patch(url, {"age": 20}, format="json").status_code, 403)
+            self.assertEqual(self.client.get(url).status_code, 200)       # but they may look
+
+    # ---------- visits: filters and the admin records export ----------
+    @patch("clinic.services.ml.predict", return_value=FAKE_PREDICTION)
+    def test_visit_filters_and_records_export(self, _fake):
+        from openpyxl import load_workbook
+        visit_id = self.diagnosed_visit(result="negative", agrees=False)     # doctor overruled the scan
+        other = self.new_visit()                                             # a second, undiagnosed visit
+        patient_id = self.client.get(f"/api/visits/{visit_id}/").json()["patient"]["id"]
+        self.act_as(self.admin)
+        mine = self.client.get(f"/api/visits/?patient={patient_id}").json()["count"]
+        self.assertEqual(mine, 1)                      # each new_visit() registers a new patient
+        self.assertEqual(self.client.get("/api/visits/?overruled=1").json()["count"], 1)
+        self.assertEqual(self.client.get("/api/visits/?result=negative").json()["count"], 1)
+        self.assertEqual(self.client.get("/api/visits/?result=positive").json()["count"], 0)
+        self.assertEqual(self.client.get("/api/visits/?search=achieng").json()["count"], 2)
+        self.assertEqual(self.client.get("/api/visits/?search=nobody").json()["count"], 0)
+        self.assertEqual(self.client.get("/api/visits/?date_from=2999-01-01").json()["count"], 0)
+        # only the admin may download
+        for user in (self.nurse, self.tech, self.doctor):
+            self.act_as(user)
+            self.assertEqual(self.client.get("/api/visits/export/").status_code, 403)
+        self.act_as(self.admin)
+        file = self.client.get("/api/visits/export/?overruled=1")
+        self.assertEqual(file.status_code, 200)
+        rows = list(load_workbook(io.BytesIO(file.content))["Records"].values)
+        self.assertEqual(len(rows), 2)                                       # header + the one overruled visit
+        header = rows[0]
+        row = dict(zip(header, rows[1]))
+        self.assertEqual(row["Patient"], "Jane Achieng")
+        self.assertEqual(row["Scan says"], "positive")
+        self.assertEqual(row["Diagnosis"], "negative")
+        self.assertEqual(row["Overruled scan"], "Yes")
+        self.assertTrue(SystemLog.objects.filter(action="EXPORT_RECORDS").exists())
+        self.assertIsNotNone(other)
+
+    # ---------- passwords ----------
+    def test_password_reset_by_email_link_and_change_password(self):
+        from django.core import mail
+        self.client.force_authenticate(user=None)
+        # unknown email gets the same answer and no mail
+        self.assertEqual(self.client.post("/api/auth/password-reset/", {"email": "ghost@test.org"}, format="json").status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.client.post("/api/auth/password-reset/", {"email": "nurse@test.org"}, format="json").status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        link = [w for w in mail.outbox[0].body.split() if "reset-password?" in w][0]
+        query = dict(part.split("=") for part in link.split("?")[1].split("&"))
+        done = self.client.post("/api/auth/password-reset/confirm/",
+                                {"uid": query["uid"], "token": query["token"], "new_password": "Brand#New2026pw"}, format="json")
+        self.assertEqual(done.status_code, 200)
+        self.assertTrue(User.objects.get(email="nurse@test.org").check_password("Brand#New2026pw"))
+        # the same link cannot be used twice
+        again = self.client.post("/api/auth/password-reset/confirm/",
+                                 {"uid": query["uid"], "token": query["token"], "new_password": "Another#Pass2026"}, format="json")
+        self.assertEqual(again.status_code, 400)
+        # a signed-in user changes their own password
+        self.act_as(self.doctor)
+        wrong = self.client.post("/api/auth/change-password/", {"old_password": "nope", "new_password": "Fresh#Pass2026"}, format="json")
+        self.assertEqual(wrong.status_code, 400)
+        ok = self.client.post("/api/auth/change-password/", {"old_password": "StrongPass#123", "new_password": "Fresh#Pass2026"}, format="json")
+        self.assertEqual(ok.status_code, 200)
