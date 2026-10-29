@@ -7,3 +7,4 @@ psycopg==3.3.6
 psycopg-binary==3.3.6
 python-dotenv==1.2.4
 tensorflow==2.21.0
+openpyxl==3.1.5
