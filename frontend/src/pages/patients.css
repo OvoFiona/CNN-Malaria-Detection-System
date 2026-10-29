@@ -32,3 +32,15 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* one visit in a patient's history */
+.patient-visit {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.patient-visit:last-child {
+  border-bottom: 0;
+}
