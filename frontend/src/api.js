@@ -27,6 +27,36 @@ function errorMessage(data, status) {
   return "Something went wrong (error " + status + "). Please try again.";
 }
 
+// Downloads a file the server builds (an Excel sheet). A normal link cannot send our login
+// token, so we fetch the file ourselves and then hand it to the browser to save.
+//   path     - e.g. "/users/export/?role=nurse"
+//   filename - what the file is called on the person's computer
+export async function downloadFile(path, filename, token) {
+  let response;
+  try {
+    response = await fetch(API_URL + path, { headers: token ? { Authorization: "Token " + token } : {} });
+  } catch {
+    throw new ApiError("Cannot reach the server. Please check that it is running.", 0);
+  }
+  if (!response.ok) {
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    throw new ApiError(errorMessage(data, response.status), response.status);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 // api("/auth/login/", { method: "POST", body: { email, password } })
 //   path   - the part after /api, e.g. "/patients/"
 //   method - GET (default), POST, PATCH ...
