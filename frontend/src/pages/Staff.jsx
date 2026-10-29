@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Form, Modal, Spinner, Table } from "react-bootstrap";
 import { useAuth } from "../AuthContext.jsx";
-import { api } from "../api.js";
+import { api, downloadFile } from "../api.js";
+import TimeFrame from "../components/TimeFrame.jsx";
+import { ALL_TIME, rangeQuery } from "../timeframe.js";
 import "./staff.css";
 
 // The four roles, in the order shown in the drop-downs (the value is what the server stores)
@@ -36,6 +38,8 @@ export default function Staff() {
   const [search, setSearch] = useState("");         // what is typed
   const [term, setTerm] = useState("");             // what we really search for (after a pause)
   const [roleFilter, setRoleFilter] = useState("");
+  const [range, setRange] = useState(ALL_TIME);      // the "account created" period
+  const [downloading, setDownloading] = useState(false);
 
   // ----- labs (for the drop-down) -----
   const [labs, setLabs] = useState([]);
@@ -64,15 +68,17 @@ export default function Staff() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // The filters as part of a web address (used by the list AND by the Excel download)
+  const filters =
+    (term ? "&search=" + encodeURIComponent(term) : "") + (roleFilter ? "&role=" + roleFilter : "") + rangeQuery(range);
+  const hasFilters = filters !== "";
+
   // Load the staff list
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
-    let url = "/users/?page=" + page;
-    if (term) url += "&search=" + encodeURIComponent(term);
-    if (roleFilter) url += "&role=" + roleFilter;
-    api(url, { token })
+    api("/users/?page=" + page + filters, { token })
       .then((data) => {
         if (cancelled) return;
         setPeople(data.results);
@@ -85,7 +91,7 @@ export default function Staff() {
     return () => {
       cancelled = true;
     };
-  }, [term, roleFilter, page, reload, token]);
+  }, [filters, page, reload, token]);
 
   // Load the labs
   useEffect(() => {
@@ -93,6 +99,20 @@ export default function Staff() {
       .then(setLabs)
       .catch((err) => setError(err.message));
   }, [labsReload, token]);
+
+  // Download what the filters show as an Excel file
+  async function handleDownload() {
+    setError("");
+    setDownloading(true);
+    try {
+      const day = new Date().toLocaleDateString("en-CA")      // 2026-10-28, in local time;
+      await downloadFile("/users/export/?" + filters.slice(1), "staff-accounts-" + day + ".xlsx", token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function setField(name, value) {
     setForm((f) => ({ ...f, [name]: value }));
@@ -187,10 +207,14 @@ export default function Staff() {
         <div>
           <h1 className="mb-1">Staff</h1>
           <p className="text-secondary mb-0">
-            {loading ? "Loading..." : count + (count === 1 ? " account" : " accounts") + (term || roleFilter ? " found" : "")}
+            {loading ? "Loading..." : count + (count === 1 ? " account" : " accounts") + (hasFilters ? " found" : "")}
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2">
+          <Button variant="outline-success" onClick={handleDownload} disabled={downloading || loading}>
+            {downloading ? <Spinner animation="border" size="sm" className="me-2" /> : <i className="bi bi-file-earmark-excel me-2"></i>}
+            Download Excel
+          </Button>
           <Button variant="outline-secondary" onClick={() => setShowLab(true)}>
             <i className="bi bi-hospital me-2"></i> Add lab
           </Button>
@@ -231,6 +255,14 @@ export default function Staff() {
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </Form.Select>
+        <TimeFrame
+          label="Created"
+          value={range}
+          onChange={(r) => {
+            setRange(r);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
