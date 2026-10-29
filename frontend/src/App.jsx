@@ -10,6 +10,10 @@ import LabReports from "./pages/LabReports.jsx";
 import Cases from "./pages/Cases.jsx";
 import Staff from "./pages/Staff.jsx";
 import Logs from "./pages/Logs.jsx";
+import Records from "./pages/Records.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
+import ChangePassword from "./pages/ChangePassword.jsx";
 
 // Decides which page to show, based on the address in the browser.
 //   Before signing in:  /  and  /signin/nurse ...
@@ -23,15 +27,19 @@ export default function App() {
           {/* before signing in */}
           <Route path="/" element={<Welcome />} />
           <Route path="/signin/:roleKey" element={<SignIn />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* after signing in */}
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Home />} />
+            <Route path="/change-password" element={<ChangePassword />} />
 
             <Route path="/patients" element={<RequireRole roles={["nurse"]}><Patients /></RequireRole>} />
             <Route path="/visits" element={<RequireRole roles={["nurse"]}><Visits /></RequireRole>} />
             <Route path="/lab" element={<RequireRole roles={["lab_technician"]}><LabReports /></RequireRole>} />
             <Route path="/cases" element={<RequireRole roles={["doctor"]}><Cases /></RequireRole>} />
+            <Route path="/records" element={<RequireRole roles={["admin"]}><Records /></RequireRole>} />
             <Route path="/users" element={<RequireRole roles={["admin"]}><Staff /></RequireRole>} />
             <Route path="/logs" element={<RequireRole roles={["admin"]}><Logs /></RequireRole>} />
           </Route>
