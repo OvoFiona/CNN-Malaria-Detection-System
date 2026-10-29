@@ -24,6 +24,7 @@ from .serializers import (
     VisitCreateSerializer,
     VisitSerializer,
 )
+from .exports import excel_response, filter_by_range, local_naive, read_date_range
 from .services import ml
 
 
@@ -54,6 +55,11 @@ class PatientViewSet(viewsets.ModelViewSet):
         patient = serializer.save()
         log_action(self.request.user, "CREATE_PATIENT", f"patient_id={patient.pk}")
 
+    # Record who corrected a patient's name or age
+    def perform_update(self, serializer):
+        patient = serializer.save()
+        log_action(self.request.user, "UPDATE_PATIENT", f"patient_id={patient.pk}")
+
 
 # ---------------------------------------------------------------
 # VISITS
@@ -68,16 +74,35 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
             return [IsNurse()]
         if self.action in ("diagnosis", "correct_diagnosis"):
             return [IsDoctor()]
+        if self.action == "export":
+            return [IsAdmin()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
         visits = Visit.objects.select_related("patient", "lab", "nurse", "lab_report", "diagnosis").prefetch_related("diagnosis__corrections")
         if self.request.user.role == Role.NURSE:
             visits = visits.filter(nurse=self.request.user)
-        wanted = self.request.query_params.get("status")
-        if wanted:
-            visits = visits.filter(status=wanted)
-        return visits
+        params = self.request.query_params
+        if params.get("status"):
+            visits = visits.filter(status=params["status"])
+        # /api/visits/?patient=3   one patient's history
+        if params.get("patient", "").isdigit():
+            visits = visits.filter(patient_id=int(params["patient"]))
+        # /api/visits/?search=jane   patient name or number
+        term = params.get("search", "").strip()
+        if term:
+            match = Q(patient__name__icontains=term)
+            if term.isdigit():
+                match |= Q(patient_id=int(term))
+            visits = visits.filter(match)
+        # /api/visits/?result=positive   the doctor's answer     /api/visits/?overruled=1   scan overruled
+        if params.get("result") in ("positive", "negative"):
+            visits = visits.filter(diagnosis__result=params["result"])
+        if params.get("overruled") == "1":
+            visits = visits.filter(diagnosis__agrees_with_prediction=False)
+        # /api/visits/?date_from=2026-10-01&date_to=2026-10-28   by visit date
+        date_from, date_to = read_date_range(self.request)
+        return filter_by_range(visits, "visit_date", date_from, date_to, has_time=False)
 
     def perform_create(self, serializer):
         visit = serializer.save(nurse=self.request.user)
@@ -88,6 +113,45 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response(VisitSerializer(serializer.instance).data, status=status.HTTP_201_CREATED)
+
+    # GET /api/visits/export/  : admin only. The same filters, as an Excel file (not paged)
+    @action(detail=False, methods=["get"], url_path="export", pagination_class=None)
+    def export(self, request):
+        visits = self.get_queryset().prefetch_related("lab_report__images")
+        date_from, date_to = read_date_range(request)
+        stages = dict(VisitStatus.choices)
+
+        def rows():
+            for v in visits.iterator(chunk_size=500):
+                images = list(v.lab_report.images.all()) if hasattr(v, "lab_report") else []
+                flagged = sum(1 for im in images if im.predicted_label == "parasitized")
+                d = getattr(v, "diagnosis", None)
+                yield [
+                    v.visit_date, v.patient.patient_number, v.patient.name, v.patient.age,
+                    v.nurse.name, v.lab.name,
+                    float(v.temperature) if v.temperature is not None else None, v.heart_rate,
+                    v.blood_pressure, v.symptoms, stages.get(v.status, v.status),
+                    len(images), flagged, ("positive" if flagged else "negative") if images else "",
+                    d.result if d else "", ("Yes" if not d.agrees_with_prediction else "No") if d else "",
+                    d.doctor.name if d else "", d.notes if d else "",
+                    d.corrections.count() if d else None, local_naive(d.created_at) if d else None,
+                ]
+
+        response = excel_response(
+            "Records",
+            ["Visit date", "Patient no.", "Patient", "Age", "Nurse", "Lab", "Temperature (C)", "Heart rate",
+             "Blood pressure", "Symptoms", "Stage", "Images scanned", "Images flagged parasitized", "Scan says",
+             "Diagnosis", "Overruled scan", "Doctor", "Doctor's notes", "Times corrected", "Diagnosed on"],
+            rows(),
+            "clinic-records.xlsx",
+            info=[("Search", request.query_params.get("search") or "none"),
+                  ("Stage", request.query_params.get("status") or "All stages"),
+                  ("Diagnosis", request.query_params.get("result") or "Any"),
+                  ("Overruled scans only", "Yes" if request.query_params.get("overruled") == "1" else "No"),
+                  ("Visits from", str(date_from or "the beginning")), ("Visits to", str(date_to or "today"))],
+        )
+        log_action(request.user, "EXPORT_RECORDS", f"from={date_from} to={date_to}")
+        return response
 
     # POST /api/visits/<id>/diagnosis/  : the doctor records her decision
     @action(detail=True, methods=["post"])
@@ -236,8 +300,29 @@ class SystemLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = SystemLogSerializer
     permission_classes = [IsAdmin]
 
-    # Optional filter:  /api/logs/?action=LOGIN_FAILED
+    # Optional filters:  /api/logs/?action=LOGIN_FAILED&date_from=2026-10-01&date_to=2026-10-28
     def get_queryset(self):
         rows = super().get_queryset()
         wanted = self.request.query_params.get("action")
-        return rows.filter(action=wanted) if wanted else rows
+        if wanted:
+            rows = rows.filter(action=wanted)
+        date_from, date_to = read_date_range(self.request)
+        return filter_by_range(rows, "logged_at", date_from, date_to)
+
+    # GET /api/logs/export/  : the same filters, as an Excel file (not paged)
+    @action(detail=False, methods=["get"], url_path="export", pagination_class=None)
+    def export(self, request):
+        rows = self.get_queryset()
+        date_from, date_to = read_date_range(request)
+        roles = dict(Role.choices)
+        response = excel_response(
+            "Activity logs",
+            ["When", "Who", "Role", "Action", "Details"],
+            ([local_naive(r.logged_at), r.actor.name if r.actor else "Not signed in",
+              roles.get(r.actor_role, r.actor_role), r.action, r.description] for r in rows.iterator()),
+            "activity-logs.xlsx",
+            info=[("Action filter", request.query_params.get("action") or "All actions"),
+                  ("From", str(date_from or "the beginning")), ("To", str(date_to or "today"))],
+        )
+        log_action(request.user, "EXPORT_LOGS", f"from={date_from} to={date_to}")   # logged AFTER the file is built
+        return response
