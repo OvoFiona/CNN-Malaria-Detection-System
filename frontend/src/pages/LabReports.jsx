@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Form, Modal, Nav, Spinner, Table } from "react-bootstrap";
 import { useAuth } from "../AuthContext.jsx";
 import { api } from "../api.js";
+import CaseView from "../components/CaseView.jsx";
 import "./lab.css";
 
 // How each visit status is written and which colour pill it gets (colours live in theme.css)
@@ -28,6 +29,7 @@ export default function LabReports() {
   const [queueError, setQueueError] = useState("");
 
   // ----- tab 2: recent cases -----
+  const [viewing, setViewing] = useState(null);      // the case open in the read-only window
   const [recent, setRecent] = useState([]);
   const [recentPage, setRecentPage] = useState(1);
   const [recentNext, setRecentNext] = useState(false);
@@ -274,7 +276,12 @@ export default function LabReports() {
                       <span className="fw-semibold">Patient {v.patient.patient_number}</span> — {v.patient.name}
                       <div className="small text-secondary">{niceDate(v.visit_date)} · {v.lab_name}</div>
                     </div>
-                    <span className={"status-badge " + st.css}>{st.label}</span>
+                    <div className="d-flex align-items-center gap-2">
+                      <span className={"status-badge " + st.css}>{st.label}</span>
+                      <Button size="sm" variant="outline-primary" onClick={() => setViewing(v)}>
+                        View
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -292,6 +299,9 @@ export default function LabReports() {
           )}
         </>
       )}
+
+      {/* read-only look at a recent case */}
+      <CaseView visit={viewing} onHide={() => setViewing(null)} />
 
       {/* ---------- the report window ---------- */}
       <Modal show={Boolean(visit)} onHide={closeReport} size="lg" centered scrollable>
