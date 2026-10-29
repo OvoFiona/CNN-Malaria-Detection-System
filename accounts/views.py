@@ -6,6 +6,7 @@ from django.core.mail import send_mail
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from django.db.models import Q
 from rest_framework.authtoken.models import Token
@@ -14,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from clinic.audit import log_action
+from clinic.exports import excel_response, filter_by_range, local_naive, read_date_range
 
 from .models import Role, User
 from .permissions import IsAdmin
@@ -74,7 +76,27 @@ class UserViewSet(viewsets.ModelViewSet):
             users = users.filter(role=role)
         if search:
             users = users.filter(Q(name__icontains=search) | Q(email__icontains=search))
-        return users
+        # Optional "created between" dates:  ?date_from=2026-10-01&date_to=2026-10-28
+        date_from, date_to = read_date_range(self.request)
+        return filter_by_range(users, "created_at", date_from, date_to)
+
+    # GET /api/users/export/  : the same filters, as an Excel file (not paged)
+    @action(detail=False, methods=["get"], url_path="export", pagination_class=None)
+    def export(self, request):
+        people = self.get_queryset()
+        date_from, date_to = read_date_range(request)
+        response = excel_response(
+            "Staff",
+            ["Name", "Email", "Role", "Lab", "Status", "Account created"],
+            ([u.name, u.email, u.get_role_display(), u.lab.name if u.lab else "",
+              "Active" if u.is_active else "Deactivated", local_naive(u.created_at)] for u in people.iterator()),
+            "staff-accounts.xlsx",
+            info=[("Role filter", request.query_params.get("role") or "All roles"),
+                  ("Search", request.query_params.get("search") or "none"),
+                  ("Created from", str(date_from or "the beginning")), ("Created to", str(date_to or "today"))],
+        )
+        log_action(request.user, "EXPORT_STAFF", f"from={date_from} to={date_to}")
+        return response
 
     def perform_update(self, serializer):
         # An admin must not lock themselves out by switching off or demoting their own account
@@ -131,6 +153,10 @@ class PasswordResetRequestView(APIView):
                 settings.DEFAULT_FROM_EMAIL,
                 [user.email],
             )
+            # While developing (DEBUG on) the email is only printed in this terminal, and the printed
+            # copy is scrambled by email encoding. So we also print the clean link here to copy.
+            if settings.DEBUG:
+                print(f"\n[DEV ONLY] Password reset link for {user.email}:\n{link}\n", flush=True)
             log_action(user, "PASSWORD_RESET_REQUESTED")
         # The SAME answer whether or not the email exists
         return Response({"detail": "If that email is registered, a reset link has been sent."})
