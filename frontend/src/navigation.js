@@ -21,6 +21,7 @@ export const NAV = {
   ],
   admin: [
     HOME,
+    { to: "/records", label: "Records", icon: "bi-folder2-open", desc: "Browse every visit, scan and diagnosis, and download them." },
     { to: "/users", label: "Staff", icon: "bi-person-gear", desc: "Create and manage staff accounts." },
     { to: "/logs", label: "Activity logs", icon: "bi-journal-text", desc: "See who did what, and when." },
   ],
