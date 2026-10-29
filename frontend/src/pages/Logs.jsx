@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Form, Spinner, Table } from "react-bootstrap";
 import { useAuth } from "../AuthContext.jsx";
-import { api } from "../api.js";
+import { api, downloadFile } from "../api.js";
+import TimeFrame from "../components/TimeFrame.jsx";
+import { ALL_TIME, rangeQuery } from "../timeframe.js";
 import "./staff.css";
 
 // How each action code from the server is written on screen.
@@ -39,12 +41,17 @@ export default function Logs() {
   const [error, setError] = useState("");
   const [action, setAction] = useState("");           // "" = every kind of action
   const [reload, setReload] = useState(0);
+  const [range, setRange] = useState(ALL_TIME);       // the period to show
+  const [downloading, setDownloading] = useState(false);
+
+  // The filters as part of a web address (used by the list AND by the Excel download)
+  const filters = (action ? "&action=" + action : "") + rangeQuery(range);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError("");
-    api("/logs/?page=" + page + (action ? "&action=" + action : ""), { token })
+    api("/logs/?page=" + page + filters, { token })
       .then((data) => {
         if (cancelled) return;
         setRows(data.results);
@@ -57,7 +64,21 @@ export default function Logs() {
     return () => {
       cancelled = true;
     };
-  }, [action, page, reload, token]);
+  }, [filters, page, reload, token]);
+
+  // Download what the filters show as an Excel file
+  async function handleDownload() {
+    setError("");
+    setDownloading(true);
+    try {
+      const day = new Date().toLocaleDateString("en-CA");      // 2026-10-28, in local time
+      await downloadFile("/logs/export/?" + filters.slice(1), "activity-logs-" + day + ".xlsx", token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   // "28 Oct 2026, 10:24"
   function niceDateTime(iso) {
@@ -70,12 +91,18 @@ export default function Logs() {
         <div>
           <h1 className="mb-1">Activity logs</h1>
           <p className="text-secondary mb-0">
-            {loading ? "Loading..." : count + (count === 1 ? " entry" : " entries") + (action ? " for this action" : "")}
+            {loading ? "Loading..." : count + (count === 1 ? " entry" : " entries") + (filters ? " found" : "")}
           </p>
         </div>
-        <Button variant="outline-secondary" onClick={() => setReload((n) => n + 1)} disabled={loading}>
-          <i className="bi bi-arrow-clockwise me-2"></i> Refresh
-        </Button>
+        <div className="d-flex flex-wrap gap-2">
+          <Button variant="outline-success" onClick={handleDownload} disabled={downloading || loading}>
+            {downloading ? <Spinner animation="border" size="sm" className="me-2" /> : <i className="bi bi-file-earmark-excel me-2"></i>}
+            Download Excel
+          </Button>
+          <Button variant="outline-secondary" onClick={() => setReload((n) => n + 1)} disabled={loading}>
+            <i className="bi bi-arrow-clockwise me-2"></i> Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="admin-filters mb-3">
@@ -92,6 +119,14 @@ export default function Logs() {
             <option key={code} value={code}>{a.label}</option>
           ))}
         </Form.Select>
+        <TimeFrame
+          label="Period"
+          value={range}
+          onChange={(r) => {
+            setRange(r);
+            setPage(1);
+          }}
+        />
       </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
