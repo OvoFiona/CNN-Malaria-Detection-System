@@ -70,6 +70,9 @@ export default function AppLayout() {
               <Dropdown.Menu className="user-menu">
                 <Dropdown.ItemText className="small text-secondary">{user.email}</Dropdown.ItemText>
                 <Dropdown.Divider />
+                <Dropdown.Item onClick={() => navigate("/change-password")}>
+                  <i className="bi bi-key me-2"></i> Change password
+                </Dropdown.Item>
                 <Dropdown.Item onClick={handleLogout}>
                   <i className="bi bi-box-arrow-right me-2"></i> Sign out
                 </Dropdown.Item>
