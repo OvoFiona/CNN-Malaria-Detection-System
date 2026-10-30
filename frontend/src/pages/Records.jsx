@@ -137,7 +137,7 @@ export default function Records() {
             <tr>
               <th>Date</th>
               <th>Patient</th>
-              <th>Nurse · Lab</th>
+              <th>People</th>
               <th>Stage</th>
               <th>Diagnosis</th>
               <th></th>
@@ -167,8 +167,10 @@ export default function Records() {
                       <div className="fw-semibold">{v.patient.name}</div>
                       <div className="small text-secondary">No. {v.patient.patient_number} · {v.patient.age} yrs</div>
                     </td>
-                    <td>
-                      <div>{v.nurse_name}</div>
+                    <td className="people-cell">
+                      <div><span className="role-label">Nurse</span> {v.nurse_name}</div>
+                      <div><span className="role-label">Lab tech</span> {v.technician_name || <span className="text-secondary">not scanned yet</span>}</div>
+                      <div><span className="role-label">Doctor</span> {d ? d.doctor_name : <span className="text-secondary">not diagnosed yet</span>}</div>
                       <div className="small text-secondary">{v.lab_name}</div>
                     </td>
                     <td><span className={"status-badge " + st.css}>{st.label}</span></td>
