@@ -25,6 +25,8 @@ class Lab(models.Model):
 class Patient(models.Model):
     name = models.CharField(max_length=100)
     age = models.PositiveSmallIntegerField()   # whole number, never negative
+    # The lab (clinic) where this patient was registered. Staff of other labs do not see the patient.
+    lab = models.ForeignKey(Lab, null=True, blank=True, on_delete=models.SET_NULL, related_name="patients")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
