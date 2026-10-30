@@ -188,3 +188,9 @@ MIN_IMAGE_SIDE = 32                     # pixels; smaller images are rejected
 # Password-reset emails. In development they are printed in the server terminal
 DEFAULT_FROM_EMAIL = "no-reply@malaria-system.local"
 FRONTEND_URL = "http://localhost:5173"    # the React site, used inside the reset link
+
+# DEMO ONLY: show the reset link on the Forgot password page instead of relying on email.
+DEMO_RESET_LINK_ON_SCREEN = os.getenv("DEMO_RESET_LINK_ON_SCREEN", "false").lower() == "true"
+if DEMO_RESET_LINK_ON_SCREEN and not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("DEMO_RESET_LINK_ON_SCREEN must be off when DEBUG is off.")
