@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.conf import settings
 from PIL import Image, UnidentifiedImageError
 
+from .scope import patients_for
 from .models import Diagnosis, DiagnosisCorrection, Lab, LabReport, Patient, ReportImage, SystemLog, Visit, VisitStatus
 
 # Converts a Patient to JSON and checks the data when one is created
@@ -26,6 +27,8 @@ class VisitSerializer(serializers.ModelSerializer):
     nurse_name = serializers.CharField(source="nurse.name", read_only=True)
     # the id of this visit's lab report, or null if the lab has not started one
     lab_report_id = serializers.SerializerMethodField()
+    # who scanned it in the lab ("" until the lab starts a report)
+    technician_name = serializers.SerializerMethodField()
     # the doctor's current answer ("positive"/"negative"), or null before diagnosis
     diagnosis_result = serializers.SerializerMethodField()
     # the full diagnosis (who, notes, overruled flag, correction history), or null
@@ -36,13 +39,17 @@ class VisitSerializer(serializers.ModelSerializer):
         fields = [
             "id", "patient", "lab", "lab_name", "nurse", "nurse_name", "visit_date",
             "temperature", "heart_rate", "blood_pressure", "symptoms", "status",
-            "lab_report_id", "diagnosis_result", "diagnosis", "created_at",
+            "lab_report_id", "technician_name", "diagnosis_result", "diagnosis", "created_at",
         ]
         read_only_fields = fields
 
     def get_lab_report_id(self, obj):
         report = getattr(obj, "lab_report", None)
         return report.pk if report else None
+
+    def get_technician_name(self, obj):
+        report = getattr(obj, "lab_report", None)
+        return report.technician.name if report else ""
 
     def get_diagnosis_result(self, obj):
         d = getattr(obj, "diagnosis", None)
@@ -58,6 +65,22 @@ class VisitCreateSerializer(serializers.ModelSerializer):
         model = Visit
         fields = ["id", "patient", "lab", "visit_date", "temperature", "heart_rate", "blood_pressure", "symptoms"]
         read_only_fields = ["id"]
+
+    # A nurse can only pick patients of her own lab
+    def validate_patient(self, patient):
+        user = self.context["request"].user
+        if not patients_for(user).filter(pk=patient.pk).exists():
+            raise serializers.ValidationError("This patient is not registered at your lab.")
+        return patient
+
+    # A nurse can only send patients to the lab she works in
+    def validate_lab(self, lab):
+        user = self.context["request"].user
+        if not user.lab_id:
+            raise serializers.ValidationError("Your account is not linked to a lab yet. Please ask the admin to set your lab.")
+        if lab.pk != user.lab_id:
+            raise serializers.ValidationError("You can only send patients to your own lab.")
+        return lab
 
     # Reject values that cannot be real
     def validate_temperature(self, value):
@@ -103,6 +126,9 @@ class LabReportSerializer(serializers.ModelSerializer):
 
     # A report can only be made for a visit that is waiting for the lab and has no report yet
     def validate_visit(self, visit):
+        user = self.context["request"].user
+        if user.role == "lab_technician" and visit.lab_id != user.lab_id:
+            raise serializers.ValidationError("This visit belongs to another lab.")
         if visit.status != VisitStatus.SENT_TO_LAB:
             raise serializers.ValidationError("This visit is not waiting for the lab.")
         if hasattr(visit, "lab_report"):
