@@ -105,7 +105,7 @@ export default function Staff() {
     setError("");
     setDownloading(true);
     try {
-      const day = new Date().toLocaleDateString("en-CA")      // 2026-10-28, in local time;
+      const day = new Date().toLocaleDateString("en-CA");      // 2026-10-28, in local time
       await downloadFile("/users/export/?" + filters.slice(1), "staff-accounts-" + day + ".xlsx", token);
     } catch (err) {
       setError(err.message);
@@ -132,8 +132,8 @@ export default function Staff() {
     setShowForm(true);
   }
 
-  // Nurses and lab technicians must belong to a lab
-  const needsLab = form.role === "nurse" || form.role === "lab_technician";
+  // Nurses, lab technicians and doctors work in one lab and only see that lab's cases
+  const needsLab = ["nurse", "lab_technician", "doctor"].includes(form.role);
   const isMe = editing && editing.id === me.id;     // an admin cannot switch themselves off
 
   // Save: create a new account, or change an existing one
