@@ -7,27 +7,38 @@ import { api, ApiError } from "./api.js";
 const AuthContext = createContext(null);
 const TOKEN_KEY = "malariascan_token";
 
-// Where the token is kept. localStorage survives closing the browser
-// ("Keep me signed in"); sessionStorage is forgotten when the tab closes.
+// Where the token is kept.
+//   sessionStorage = THIS browser tab only. Every tab remembers its own person, so you can
+//                    have a nurse in one tab and a doctor in another, and refreshing keeps each one.
+//   localStorage   = shared by all tabs and survives closing the browser ("Keep me signed in").
+//                    It is only used to sign a NEW tab in as the person who last chose to be remembered.
 // Each access is wrapped in try/catch because browsers can block storage.
 function readToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    const own = sessionStorage.getItem(TOKEN_KEY);           // this tab's own sign-in comes first
+    if (own) return own;
+    const remembered = localStorage.getItem(TOKEN_KEY);      // a new tab: use the remembered person
+    if (remembered) sessionStorage.setItem(TOKEN_KEY, remembered);   // and from now on this tab keeps it
+    return remembered;
   } catch {
     return null;
   }
 }
 function saveToken(token, remember) {
   try {
-    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_KEY, token);                // always: this tab
+    if (remember) localStorage.setItem(TOKEN_KEY, token);    // also for new tabs and after closing the browser
   } catch {
     /* storage blocked: the user just stays signed in until they refresh */
   }
 }
+// Forget this tab's sign-in. The shared "remembered" copy is only removed if it is the SAME person,
+// so signing out in one tab does not sign out a different person in another tab.
 function clearToken() {
   try {
-    localStorage.removeItem(TOKEN_KEY);
+    const own = sessionStorage.getItem(TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_KEY);
+    if (!own || localStorage.getItem(TOKEN_KEY) === own) localStorage.removeItem(TOKEN_KEY);
   } catch {
     /* nothing to do */
   }
