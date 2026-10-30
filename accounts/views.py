@@ -105,10 +105,13 @@ class UserViewSet(viewsets.ModelViewSet):
             if data.get("is_active") is False or ("role" in data and data["role"] != Role.ADMIN):
                 raise ValidationError("You cannot deactivate your own account or change your own role.")
         user = serializer.save()
-        # A deactivated user is logged out immediately: their token is removed
-        if not user.is_active:
+        password_set = "password" in serializer.validated_data
+        # A deactivated user is logged out immediately: their token is removed.
+        # The same when the admin sets a new password for them (any old login must stop working).
+        if not user.is_active or password_set:
             Token.objects.filter(user=user).delete()
-        log_action(self.request.user, "UPDATE_USER", f"user_id={user.pk} active={user.is_active} role={user.role}")
+        log_action(self.request.user, "UPDATE_USER",
+                   f"user_id={user.pk} active={user.is_active} role={user.role}" + (" password_changed=yes" if password_set else ""))
 
 
 # Logs the user out by removing their token
@@ -142,6 +145,7 @@ class PasswordResetRequestView(APIView):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = User.objects.filter(email__iexact=serializer.validated_data["email"], is_active=True).first()
+        link = None
         if user:
             uid = urlsafe_base64_encode(force_bytes(user.pk))          # the user's id, encoded
             token = default_token_generator.make_token(user)          # a one-time code
@@ -158,6 +162,15 @@ class PasswordResetRequestView(APIView):
             if settings.DEBUG:
                 print(f"\n[DEV ONLY] Password reset link for {user.email}:\n{link}\n", flush=True)
             log_action(user, "PASSWORD_RESET_REQUESTED")
+        # DEMO MODE (off unless DEMO_RESET_LINK_ON_SCREEN=true in .env): there is no real inbox, so we hand
+        # the link straight back. This tells the caller whether the email exists, which is fine for a demo
+        # and NOT fine for real use (settings.py refuses to start with it on when DEBUG is off).
+        if getattr(settings, "DEMO_RESET_LINK_ON_SCREEN", False):
+            return Response({
+                "detail": "Demo mode: no email service is connected.",
+                "demo_mode": True,
+                "reset_url": link,                     # null when no active account uses that email
+            })
         # The SAME answer whether or not the email exists
         return Response({"detail": "If that email is registered, a reset link has been sent."})
 
