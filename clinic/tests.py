@@ -396,3 +396,128 @@ class SystemTests(APITestCase):
         self.assertEqual(wrong.status_code, 400)
         ok = self.client.post("/api/auth/change-password/", {"old_password": "StrongPass#123", "new_password": "Fresh#Pass2026"}, format="json")
         self.assertEqual(ok.status_code, 200)
+
+    # ---------- labs keep their cases apart ----------
+    @patch("clinic.services.ml.predict", return_value=FAKE_PREDICTION)
+    def test_technicians_only_see_and_work_on_their_own_lab(self, _fake):
+        homabay = Lab.objects.create(name="Homabay Lab", location="Homabay")
+        far_tech = User.objects.create_user(email="far@test.org", password="StrongPass#123", name="Far Tech",
+                                            role=Role.LAB_TECHNICIAN, lab=homabay)
+        visit_id = self.new_visit()                          # a Kisumu case
+        report_id = self.new_report(visit_id)                # made by the Kisumu technician
+        # the Kisumu technician sees it
+        self.act_as(self.tech)
+        self.assertEqual(self.client.get("/api/visits/").json()["count"], 1)
+        self.assertEqual(self.client.get("/api/lab-reports/").json()["count"], 1)
+        # the Homabay technician sees nothing of it
+        self.act_as(far_tech)
+        self.assertEqual(self.client.get("/api/visits/").json()["count"], 0)
+        self.assertEqual(self.client.get(f"/api/visits/{visit_id}/").status_code, 404)
+        self.assertEqual(self.client.get("/api/lab-reports/").json()["count"], 0)
+        self.assertEqual(self.client.get(f"/api/lab-reports/{report_id}/").status_code, 404)
+        self.assertEqual(self.client.post(f"/api/lab-reports/{report_id}/images/", {"image": make_png()}, format="multipart").status_code, 404)
+        self.assertEqual(self.client.post(f"/api/lab-reports/{report_id}/refer/").status_code, 404)
+        # ...and cannot start a report for a Kisumu visit
+        second = self.new_visit()
+        self.act_as(far_tech)
+        blocked = self.client.post("/api/lab-reports/", {"visit": second, "notes": ""}, format="json")
+        self.assertEqual(blocked.status_code, 400)
+        # a technician with no lab sees nothing at all
+        self.tech.lab = None
+        self.tech.save()
+        self.act_as(self.tech)
+        self.assertEqual(self.client.get("/api/visits/").json()["count"], 0)
+        # the Kisumu doctor sees her lab's cases and the admin sees every lab
+        for user in (self.doctor, self.admin):
+            self.act_as(user)
+            self.assertEqual(self.client.get("/api/visits/").json()["count"], 2)
+        # the visit that has a report names the technician who scanned it
+        names = {v["id"]: v["technician_name"] for v in self.client.get("/api/visits/").json()["results"]}
+        self.assertEqual(names[visit_id], self.tech.name)
+        self.assertEqual(names[second], "")
+
+    @patch("clinic.services.ml.predict", return_value=FAKE_PREDICTION)
+    def test_nurses_and_doctors_of_another_lab_see_nothing_of_this_lab(self, _fake):
+        homabay = Lab.objects.create(name="Homabay Lab", location="Homabay")
+        far_nurse = User.objects.create_user(email="farn@test.org", password="StrongPass#123", name="Far Nurse",
+                                             role=Role.NURSE, lab=homabay)
+        far_doctor = User.objects.create_user(email="fard@test.org", password="StrongPass#123", name="Far Doctor",
+                                              role=Role.DOCTOR, lab=homabay)
+        visit_id = self.new_visit()                           # a Kisumu patient and case
+        report_id = self.new_report(visit_id)
+        patient_id = self.client.get(f"/api/visits/{visit_id}/").json()["patient"]
+        if isinstance(patient_id, dict):
+            patient_id = patient_id["id"]
+        # the Homabay nurse: no Kisumu patients, visits or reports, and cannot use the patient
+        self.act_as(far_nurse)
+        self.assertEqual(self.client.get("/api/patients/").json()["count"], 0)
+        self.assertEqual(self.client.get(f"/api/patients/{patient_id}/").status_code, 404)
+        self.assertEqual(self.client.get("/api/visits/").json()["count"], 0)
+        sneaky = self.client.post("/api/visits/", {"patient": patient_id, "lab": homabay.pk, "symptoms": "fever"}, format="json")
+        self.assertEqual(sneaky.status_code, 400)
+        # she registers her own patient and sees only that one
+        mine = self.client.post("/api/patients/", {"name": "Homabay Patient", "age": 40}, format="json")
+        self.assertEqual(mine.status_code, 201)
+        self.assertEqual(self.client.get("/api/patients/").json()["count"], 1)
+        # the Homabay doctor sees none of the Kisumu cases and cannot diagnose them
+        self.act_as(far_doctor)
+        self.assertEqual(self.client.get("/api/visits/").json()["count"], 0)
+        self.assertEqual(self.client.get("/api/lab-reports/").json()["count"], 0)
+        self.assertEqual(self.client.get(f"/api/lab-reports/{report_id}/").status_code, 404)
+        self.assertEqual(self.client.get("/api/patients/").json()["count"], 0)
+        self.assertEqual(self.client.post(f"/api/visits/{visit_id}/diagnosis/", {"result": "positive", "agrees_with_prediction": True}, format="json").status_code, 404)
+        # the Kisumu team (nurse, technician, doctor) all still see their lab's patient
+        for user in (self.nurse, self.tech, self.doctor):
+            self.act_as(user)
+            self.assertEqual(self.client.get("/api/patients/").json()["count"], 1)
+        # the admin sees both patients
+        self.act_as(self.admin)
+        self.assertEqual(self.client.get("/api/patients/").json()["count"], 2)
+        # a nurse or doctor with no lab sees nothing
+        self.nurse.lab = None
+        self.nurse.save()
+        self.act_as(self.nurse)
+        self.assertEqual(self.client.get("/api/patients/").json()["count"], 0)
+
+    def test_a_nurse_can_only_send_patients_to_her_own_lab(self):
+        other = Lab.objects.create(name="Homabay Lab", location="Homabay")
+        self.act_as(self.nurse)
+        patient = self.client.post("/api/patients/", {"name": "Test Patient", "age": 30}, format="json").json()["id"]
+        wrong = self.client.post("/api/visits/", {"patient": patient, "lab": other.pk, "symptoms": "fever"}, format="json")
+        self.assertEqual(wrong.status_code, 400)
+        self.nurse.lab = None
+        self.nurse.save()
+        none = self.client.post("/api/visits/", {"patient": patient, "lab": self.lab.pk, "symptoms": "fever"}, format="json")
+        self.assertEqual(none.status_code, 400)
+
+    def test_admin_setting_a_password_signs_that_person_out_and_is_logged(self):
+        from rest_framework.authtoken.models import Token
+        Token.objects.get_or_create(user=self.nurse)
+        self.act_as(self.admin)
+        done = self.client.patch(f"/api/users/{self.nurse.pk}/", {"password": "Brand#New2026pw"}, format="json")
+        self.assertEqual(done.status_code, 200)
+        self.assertTrue(User.objects.get(pk=self.nurse.pk).check_password("Brand#New2026pw"))
+        self.assertFalse(Token.objects.filter(user=self.nurse).exists())
+        self.assertTrue(SystemLog.objects.filter(action="UPDATE_USER", description__contains="password_changed=yes").exists())
+        # a weak password is refused
+        self.assertEqual(self.client.patch(f"/api/users/{self.nurse.pk}/", {"password": "12345678"}, format="json").status_code, 400)
+
+    # ---------- demo mode for the reset link ----------
+    def test_reset_link_is_only_shown_on_screen_in_demo_mode(self):
+        self.client.force_authenticate(user=None)
+        body = {"email": "nurse@test.org"}
+        # normal mode: no link in the answer, and an unknown email looks the same as a known one
+        normal = self.client.post("/api/auth/password-reset/", body, format="json").json()
+        ghost = self.client.post("/api/auth/password-reset/", {"email": "ghost@test.org"}, format="json").json()
+        self.assertNotIn("reset_url", normal)
+        self.assertEqual(normal, ghost)
+        # demo mode: the link comes back for a real account, and null for an unknown email
+        with override_settings(DEMO_RESET_LINK_ON_SCREEN=True):
+            demo = self.client.post("/api/auth/password-reset/", body, format="json").json()
+            nobody = self.client.post("/api/auth/password-reset/", {"email": "ghost@test.org"}, format="json").json()
+        self.assertTrue(demo["demo_mode"])
+        self.assertIsNone(nobody["reset_url"])
+        query = dict(part.split("=") for part in demo["reset_url"].split("?")[1].split("&"))
+        done = self.client.post("/api/auth/password-reset/confirm/",
+                                {"uid": query["uid"], "token": query["token"], "new_password": "Demo#Reset2026pw"}, format="json")
+        self.assertEqual(done.status_code, 200)
