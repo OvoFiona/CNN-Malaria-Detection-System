@@ -25,6 +25,7 @@ from .serializers import (
     VisitSerializer,
 )
 from .exports import excel_response, filter_by_range, local_naive, read_date_range
+from .scope import is_lab_bound, patients_for
 from .services import ml
 
 
@@ -36,7 +37,7 @@ class PatientViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "put", "head", "options"]
 
     def get_queryset(self):
-        patients = Patient.objects.all()
+        patients = patients_for(self.request.user)      # only the patients of the user's own lab
         term = self.request.query_params.get("search", "").strip()
         if term:
             match = Q(name__icontains=term)
@@ -52,7 +53,8 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     # Record who registered the patient
     def perform_create(self, serializer):
-        patient = serializer.save()
+        # the new patient belongs to the lab of the person who registers them
+        patient = serializer.save(lab=self.request.user.lab)
         log_action(self.request.user, "CREATE_PATIENT", f"patient_id={patient.pk}")
 
     # Record who corrected a patient's name or age
@@ -79,9 +81,15 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        visits = Visit.objects.select_related("patient", "lab", "nurse", "lab_report", "diagnosis").prefetch_related("diagnosis__corrections")
-        if self.request.user.role == Role.NURSE:
-            visits = visits.filter(nurse=self.request.user)
+        visits = Visit.objects.select_related(
+            "patient", "lab", "nurse", "lab_report__technician", "diagnosis__doctor"
+        ).prefetch_related("diagnosis__corrections")
+        user = self.request.user
+        if is_lab_bound(user):
+            # nurses, technicians and doctors only see the cases of the lab they work in
+            visits = visits.filter(lab_id=user.lab_id) if user.lab_id else visits.none()
+        if user.role == Role.NURSE:
+            visits = visits.filter(nurse=user)                  # and a nurse only her own visits
         params = self.request.query_params
         if params.get("status"):
             visits = visits.filter(status=params["status"])
@@ -128,7 +136,7 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
                 d = getattr(v, "diagnosis", None)
                 yield [
                     v.visit_date, v.patient.patient_number, v.patient.name, v.patient.age,
-                    v.nurse.name, v.lab.name,
+                    v.nurse.name, v.lab.name, v.lab_report.technician.name if hasattr(v, "lab_report") else "",
                     float(v.temperature) if v.temperature is not None else None, v.heart_rate,
                     v.blood_pressure, v.symptoms, stages.get(v.status, v.status),
                     len(images), flagged, ("positive" if flagged else "negative") if images else "",
@@ -139,7 +147,7 @@ class VisitViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Retrie
 
         response = excel_response(
             "Records",
-            ["Visit date", "Patient no.", "Patient", "Age", "Nurse", "Lab", "Temperature (C)", "Heart rate",
+            ["Visit date", "Patient no.", "Patient", "Age", "Nurse", "Lab", "Lab technician", "Temperature (C)", "Heart rate",
              "Blood pressure", "Symptoms", "Stage", "Images scanned", "Images flagged parasitized", "Scan says",
              "Diagnosis", "Overruled scan", "Doctor", "Doctor's notes", "Times corrected", "Diagnosed on"],
             rows(),
@@ -227,7 +235,12 @@ class LabReportViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, mixins.Re
         return [IsLabStaffOrDoctor()]
 
     def get_queryset(self):
-        return LabReport.objects.select_related("visit", "technician").prefetch_related("images")
+        reports = LabReport.objects.select_related("visit", "technician").prefetch_related("images")
+        user = self.request.user
+        if is_lab_bound(user):
+            # staff only see the reports of the lab they work in
+            reports = reports.filter(lab_id=user.lab_id) if user.lab_id else reports.none()
+        return reports
 
     def perform_create(self, serializer):
         visit = serializer.validated_data["visit"]
